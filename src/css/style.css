@@ -454,3 +454,32 @@ body.nis {
 .normalscroll::-webkit-scrollbar-track { background: transparent; }
 .normalscroll::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
 .normalscroll::-webkit-scrollbar-thumb:hover { background: #44445a; }
+
+/* ── Debug Log ───────────────────────────────────────────────────── */
+.vgt-debug-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #010409;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-size: 10px;
+  color: #7d8590;
+}
+
+.vgt-debug-entry {
+  padding: 1px 0;
+  border-bottom: 1px solid #21262d28;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.vgt-debug-entry:first-child {
+  color: #adbac7;
+}
+
+.vgt-debug-entry.muted {
+  color: #444;
+}

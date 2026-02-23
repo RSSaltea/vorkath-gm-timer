@@ -29,6 +29,7 @@
     <div class="vgt-tabs">
       <button class="vgt-tab active" data-tab="status">Status</button>
       <button class="vgt-tab" data-tab="queue">Full Queue</button>
+      <button class="vgt-tab" data-tab="debug">Debug</button>
     </div>
 
     <!-- ── STATUS TAB ── -->
@@ -79,8 +80,22 @@
 
     </div>
 
+    <!-- ── DEBUG TAB ── -->
+    <div class="vgt-page" id="tab-debug">
+
+      <div class="vgt-queue-header">
+        <div class="vgt-label">Debug Log</div>
+        <button class="vgt-refresh-btn" id="debug-clear-btn">✕ Clear</button>
+      </div>
+
+      <div class="vgt-debug-log normalscroll" id="debug-log">
+        <div class="vgt-debug-entry muted">Waiting for events...</div>
+      </div>
+
+    </div>
+
   </div>
 
-  <script src="./src/script.js?v=1.0"></script>
+  <script src="./src/script.js?v=1.4"></script>
 </body>
 </html>

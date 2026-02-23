@@ -23,6 +23,21 @@ let refreshTimer  = null;
 // ── Chatbox reader ────────────────────────────────────────────────
 let chatReader = null;
 
+// ── Debug log ─────────────────────────────────────────────────────
+
+function log(msg) {
+  console.log('[VGT]', msg);
+  try {
+    var out = document.getElementById('debug-log');
+    if (!out) return;
+    var d = document.createElement('div');
+    d.className = 'vgt-debug-entry';
+    d.textContent = new Date().toLocaleTimeString() + '  ' + String(msg);
+    out.prepend(d);
+    while (out.childElementCount > 80) out.removeChild(out.lastChild);
+  } catch (e) {}
+}
+
 // ── Helpers ───────────────────────────────────────────────────────
 
 /**
@@ -91,11 +106,11 @@ function detectName() {
 }
 
 function initChatbox() {
-  if (typeof alt1 === 'undefined') { console.log('[VGT] alt1 not defined, skipping chatbox'); return; }
-  if (typeof Chatbox === 'undefined') { console.log('[VGT] Chatbox not defined, skipping chatbox'); return; }
+  if (typeof alt1 === 'undefined') { log('alt1 not defined — chatbox skipped'); return; }
+  if (typeof Chatbox === 'undefined') { log('Chatbox lib not defined — chatbox skipped'); return; }
   try {
     chatReader = new Chatbox.default();
-    console.log('[VGT] chatReader created:', chatReader);
+    log('chatReader created');
 
     // mixColor lives on A1lib in the browser UMD build, not as a plain global.
     var mc = (typeof mixColor === 'function') ? mixColor
@@ -111,9 +126,9 @@ function initChatbox() {
         ],
         backwards: true,
       };
-      console.log('[VGT] readargs set');
+      log('readargs set with ' + chatReader.readargs.colors.length + ' colours');
     } else {
-      console.warn('[VGT] mixColor not found, using default readargs');
+      log('mixColor not found — using default readargs');
     }
 
     // Wrap in setTimeout so Alt1 has time to finish app identification first.
@@ -121,16 +136,17 @@ function initChatbox() {
       var finder = setInterval(function () {
         try {
           if (!chatReader.pos) {
-            console.log('[VGT] calling find()...');
+            log('calling find()...');
             chatReader.find();
+            log('find() returned — pos=' + JSON.stringify(chatReader.pos));
           } else {
-            console.log('[VGT] chatbox found at', chatReader.pos);
+            log('chatbox found at ' + JSON.stringify(chatReader.pos));
             clearInterval(finder);
             setInterval(function () {
-              try { chatReader.read(); } catch (e) { console.error('[VGT] read error:', e); }
+              try { chatReader.read(); } catch (e) { log('read error: ' + e); }
             }, 250);
           }
-        } catch (e) { console.error('[VGT] finder error:', e); }
+        } catch (e) { log('finder error: ' + e); }
       }, 800);
     }, 50);
 
@@ -138,10 +154,10 @@ function initChatbox() {
     setInterval(function () {
       try {
         if (chatReader && !chatReader.pos) { chatReader.find(); }
-      } catch (e) { console.error('[VGT] ensureFound error:', e); }
+      } catch (e) { log('ensureFound error: ' + e); }
     }, 2000);
   } catch (e) {
-    console.error('[VGT] initChatbox error:', e);
+    log('initChatbox error: ' + e);
   }
 }
 
@@ -423,6 +439,12 @@ function init() {
   document.getElementById('refresh-btn').addEventListener('click', refresh);
   document.getElementById('refresh-btn-queue').addEventListener('click', refresh);
 
+  // ── Debug clear button
+  document.getElementById('debug-clear-btn').addEventListener('click', function() {
+    var out = document.getElementById('debug-log');
+    out.innerHTML = '<div class="vgt-debug-entry muted">Log cleared.</div>';
+  });
+
   // ── Start chatbox reader (shows Alt1 capture overlay)
   initChatbox();
 
@@ -435,7 +457,14 @@ function init() {
 
 // ── Identify app to Alt1 immediately on script load (must run before chatbox)
 if (typeof alt1 !== 'undefined') {
-  try { alt1.identifyAppUrl('./appconfig.json'); } catch (e) {}
+  try {
+    alt1.identifyAppUrl('./appconfig.json');
+    console.log('[VGT] identifyAppUrl called');
+  } catch (e) {
+    console.error('[VGT] identifyAppUrl error:', e);
+  }
+} else {
+  console.log('[VGT] alt1 not present at top level');
 }
 
 if (document.readyState === 'loading') {
