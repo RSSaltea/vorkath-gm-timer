@@ -12,10 +12,10 @@ const SHEET_ID    = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
 const SHEET_NAME  = 'List';
 const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
 
-const FORM_VIEWURL = 'https://docs.google.com/forms/d/' +
-                     '1FTSwwobx_g0n4K4dQM8MO_45jRfeQ2bzSnPddIH4Jy8' +
-                     '/viewform?usp=pp_url';
-const FORM_ENTRY   = 'entry.1456397394';  // "Your RuneScape name?" field
+const FORM_POST_URL = 'https://docs.google.com/forms/d/e/' +
+                      '1FAIpQLSd_D9dhB-4fOtp1tFmkzyD-ez9rScat76I15GfpoAlREvas7g' +
+                      '/formResponse';
+const FORM_ENTRY    = 'entry.1456397394';  // "Your RuneScape name?" field
 
 // ── State ─────────────────────────────────────────────────────────
 let queueData     = [];   // current full queue (array of strings)
@@ -286,30 +286,41 @@ async function refresh() {
 
 // ── Join Queue ────────────────────────────────────────────────────
 
-function joinQueue() {
+async function joinQueue() {
   var name = getEffectiveName();
   if (!name) return;
 
-  // Build a pre-filled form URL so the user just has to click Submit
-  var url = FORM_VIEWURL + '&' + FORM_ENTRY + '=' + encodeURIComponent(name);
+  var btn = document.getElementById('join-queue-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Submitting...';
 
-  // Open in the system browser (Alt1) or a new tab (plain browser)
-  if (typeof alt1 !== 'undefined') {
-    alt1.openBrowser(url);
-  } else {
-    window.open(url, '_blank');
+  var body = [
+    FORM_ENTRY + '=' + encodeURIComponent(name),
+    'fvv=1',
+    'pageHistory=0',
+    'fbzx=' + Math.floor(Math.random() * 9e15),
+  ].join('&');
+
+  try {
+    await fetch(FORM_POST_URL, {
+      method:  'POST',
+      mode:    'no-cors',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    body,
+    });
+  } catch (e) {
+    // no-cors response is always opaque — errors here are network failures
+    console.warn('[VGT] Form submit error:', e);
   }
 
-  var btn = document.getElementById('join-queue-btn');
-  btn.textContent = '↗ Opened in browser — submit & refresh';
-  btn.disabled    = true;
+  btn.textContent = '✓ Submitted!';
   btn.classList.add('submitted');
   setTimeout(function() {
     btn.textContent = '+ Join Queue';
     btn.disabled    = false;
     btn.classList.remove('submitted');
     refresh();
-  }, 8000);
+  }, 5000);
 }
 
 // ── Initialise ────────────────────────────────────────────────────
