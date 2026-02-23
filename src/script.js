@@ -294,24 +294,49 @@ function joinQueue() {
   btn.disabled    = true;
   btn.textContent = 'Submitting...';
 
-  fetch(FORM_URL, {
-    method:  'POST',
-    mode:    'no-cors',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    FORM_ENTRY + '=' + encodeURIComponent(name),
-  }).then(function() {
-    btn.textContent = '✓ Submitted — refreshing in 5s';
-    btn.classList.add('submitted');
-    setTimeout(function() {
-      btn.textContent = '+ Join Queue';
-      btn.disabled    = false;
-      btn.classList.remove('submitted');
-      refresh();
-    }, 5000);
-  }).catch(function() {
-    btn.textContent = 'Failed — tap to retry';
-    btn.disabled    = false;
+  // Use a hidden iframe + form POST — avoids CORS entirely and includes
+  // the extra fields Google Forms requires (fvv, pageHistory, fbzx).
+  var iframe = document.createElement('iframe');
+  iframe.name = '_vgt_submit';
+  iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(iframe);
+
+  var form = document.createElement('form');
+  form.method = 'POST';
+  form.action = FORM_URL;
+  form.target = '_vgt_submit';
+  form.style.display = 'none';
+
+  [
+    [FORM_ENTRY, name],
+    ['fvv',         '1'],
+    ['pageHistory', '0'],
+    ['fbzx',        Math.floor(Math.random() * 9e15).toString()],
+  ].forEach(function(pair) {
+    var inp = document.createElement('input');
+    inp.type  = 'hidden';
+    inp.name  = pair[0];
+    inp.value = pair[1];
+    form.appendChild(inp);
   });
+
+  document.body.appendChild(form);
+  form.submit();
+
+  // Clean up DOM after submission completes
+  setTimeout(function() {
+    try { document.body.removeChild(form);   } catch (e) {}
+    try { document.body.removeChild(iframe); } catch (e) {}
+  }, 5000);
+
+  btn.textContent = '✓ Submitted — refreshing in 5s';
+  btn.classList.add('submitted');
+  setTimeout(function() {
+    btn.textContent = '+ Join Queue';
+    btn.disabled    = false;
+    btn.classList.remove('submitted');
+    refresh();
+  }, 5000);
 }
 
 // ── Initialise ────────────────────────────────────────────────────
