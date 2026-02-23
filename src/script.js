@@ -294,29 +294,36 @@ function joinQueue() {
   btn.disabled    = true;
   btn.textContent = 'Submitting...';
 
-  var params = new URLSearchParams();
-  params.append(FORM_ENTRY, name);
-  params.append('fvv', '1');
-  params.append('pageHistory', '0');
-  params.append('fbzx', String(Math.floor(Math.random() * 9e15)));
+  var body = [
+    FORM_ENTRY + '=' + encodeURIComponent(name),
+    'fvv=1',
+    'pageHistory=0',
+    'fbzx=' + String(Math.floor(Math.random() * 9e15)),
+  ].join('&');
 
-  var sent = false;
-
-  // sendBeacon — fire-and-forget POST, bypasses CORS response restrictions
+  // 1) sendBeacon
+  var beaconSent = false;
   if (navigator.sendBeacon) {
-    sent = navigator.sendBeacon(FORM_POST_URL, params);
+    beaconSent = navigator.sendBeacon(FORM_POST_URL, new Blob([body], { type: 'application/x-www-form-urlencoded' }));
   }
 
-  // Fallback: fetch no-cors
-  if (!sent) {
-    fetch(FORM_POST_URL, {
-      method:  'POST',
-      mode:    'no-cors',
-      body:    params,
-    }).catch(function(e) { console.warn('[VGT] Form submit error:', e); });
-  }
+  // 2) XHR (behaves differently from fetch in some embedded webviews)
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', FORM_POST_URL, true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.send(body);
+  } catch (e) { console.warn('[VGT] XHR error:', e); }
 
-  btn.textContent = '✓ Submitted!';
+  // 3) fetch no-cors fallback
+  fetch(FORM_POST_URL, {
+    method:  'POST',
+    mode:    'no-cors',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    body,
+  }).catch(function(e) { console.warn('[VGT] fetch error:', e); });
+
+  btn.textContent = beaconSent ? '✓ Submitted!' : '✓ Sent (no beacon)';
   btn.classList.add('submitted');
   setTimeout(function() {
     btn.textContent = '+ Join Queue';
@@ -351,11 +358,14 @@ function init() {
     });
   });
 
-  // ── Name input: persist to localStorage and refresh status immediately
+  // ── Name input: update display immediately; refresh queue 1s after typing stops
+  var nameDebounce = null;
   document.getElementById('name-override').addEventListener('input', function() {
     try { localStorage.setItem('vgt_playerName', this.value.trim()); } catch (e) {}
-    updateStatus(queueData.length > 0 ? queueData : null);
-    updateQueueList(queueData.length > 0 ? queueData : null);
+    updateStatus(queueData);
+    updateQueueList(queueData);
+    clearTimeout(nameDebounce);
+    nameDebounce = setTimeout(refresh, 1000);
   });
 
   // ── Join Queue button
