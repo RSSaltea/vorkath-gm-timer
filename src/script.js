@@ -92,19 +92,35 @@ function detectName() {
 }
 
 /**
+ * Collect all font definitions available from the Chatbox module.
+ * Chatbox.fonts is an array of {name, lineheight, badgey, dy, def} objects.
+ * We also include chatReader.font if it was set by a successful read().
+ */
+function getChatFonts() {
+  var fonts = [];
+  // Prefer the dynamically-detected font if read() already set it
+  if (chatReader && chatReader.font) fonts.push(chatReader.font);
+  // Pull all bundled font definitions from the Chatbox module
+  if (typeof Chatbox !== 'undefined' && Array.isArray(Chatbox.fonts)) {
+    for (var i = 0; i < Chatbox.fonts.length; i++) {
+      var f = Chatbox.fonts[i];
+      if (f && f.def) fonts.push(f.def);
+    }
+  }
+  return fonts;
+}
+
+/**
  * Try to OCR the name from the chatbox input line.
  * The input line always shows "PlayerName◆: [Public Chat – Press Enter to Chat]"
- * which is the most reliable source since it requires no chat activity.
+ * Fonts come directly from Chatbox.fonts so we never depend on chatReader.font.
+ * Uses .toData() on the ImgRefBind (same pattern as cluetrainer).
  *
  * Returns true if a name was successfully extracted.
  */
 function tryNameFromInputLine() {
   if (!chatReader || !chatReader.pos) {
     log('ocr: chatReader.pos not set yet');
-    return false;
-  }
-  if (!chatReader.font) {
-    log('ocr: chatReader.font not set yet — waiting for first read()');
     return false;
   }
   if (typeof OCR === 'undefined' || !OCR.readLine) {
@@ -116,87 +132,99 @@ function tryNameFromInputLine() {
     return false;
   }
 
+  var fonts = getChatFonts();
+  if (fonts.length === 0) {
+    log('ocr: no fonts available (Chatbox.fonts=' +
+        (typeof Chatbox !== 'undefined' ? JSON.stringify(Chatbox.fonts && Chatbox.fonts.length) : 'undef') + ')');
+    return false;
+  }
+
   var mainbox = chatReader.pos.mainbox;
   var rect    = mainbox.rect;
-  var lineOx  = mainbox.lineOx !== undefined ? mainbox.lineOx : 0;
-  var lineOy  = mainbox.lineOy !== undefined ? mainbox.lineOy : 213;
+  // pos properties are line0x / line0y (digit zero, not letter O)
+  var lox = mainbox.line0x !== undefined ? mainbox.line0x : 0;
+  var loy = mainbox.line0y !== undefined ? mainbox.line0y : 213;
 
-  // Absolute screen coords of the input line
-  var sx = rect.x + lineOx;
-  var sy = rect.y + lineOy;
+  var sx = rect.x + lox;
+  var sy = rect.y + loy;
 
-  log('ocr: input line screen pos sx=' + sx + ' sy=' + sy + ' w=' + rect.width);
+  log('ocr: input line sx=' + sx + ' sy=' + sy + ' w=' + rect.width +
+      ' fonts=' + fonts.length);
 
-  // Capture a 20-pixel-tall strip centred on the input line baseline.
-  // We start 14px above sy so the text sits around y=10-14 inside the buffer.
+  // Capture a 24-pixel-tall strip.  sy is the top of the input row, so text
+  // sits roughly in the middle of the captured buffer.
   var capX = sx;
-  var capY = sy - 14;
+  var capY = sy - 2;          // start 2px above the row
   var capW = rect.width || 368;
-  var capH = 20;
+  var capH = 24;
 
   try {
-    var img = A1lib.captureHold(capX, capY, capW, capH);
-    if (!img) { log('ocr: captureHold returned null'); return false; }
+    var imgRef = A1lib.captureHold(capX, capY, capW, capH);
+    if (!imgRef) { log('ocr: captureHold null'); return false; }
 
-    var mc = (A1lib.mixColor) ? A1lib.mixColor
-           : (typeof mixColor === 'function') ? mixColor
-           : null;
+    // .toData() converts the ImgRefBind to ImageData for OCR (cluetrainer pattern)
+    var img = imgRef.toData ? imgRef.toData() : imgRef;
+    if (!img) { log('ocr: toData() null'); return false; }
+
+    var mc = A1lib.mixColor || (typeof mixColor === 'function' ? mixColor : null);
     if (!mc) { log('ocr: mixColor not available'); return false; }
 
-    // Colours to try — RS input line name is typically white/yellow/blue
+    // All plausible colours for RS input-line name text
     var colorSets = [
       [mc(255, 255, 255)],   // white
       [mc(255, 255, 0)],     // yellow
       [mc(255, 200, 0)],     // gold
       [mc(127, 169, 255)],   // public chat blue
-      [mc(69,  131, 145)],   // name teal (readargs)
+      [mc(69,  131, 145)],   // name teal
       [mc(153, 255, 153)],   // green
     ];
 
-    // Try several y-baselines within the captured strip
-    var yOffsets = [6, 8, 10, 12, 14];
+    var yOffsets = [4, 6, 8, 10, 12, 14, 16, 18];
 
-    for (var yi = 0; yi < yOffsets.length; yi++) {
-      for (var ci = 0; ci < colorSets.length; ci++) {
-        var res = OCR.readLine(img, chatReader.font, colorSets[ci], 0, yOffsets[yi], true, false);
-        if (!res) continue;
-        var text = (typeof res === 'string') ? res : (res.text || '');
-        if (!text || text.length < 2) continue;
+    for (var fi = 0; fi < fonts.length; fi++) {
+      for (var yi = 0; yi < yOffsets.length; yi++) {
+        for (var ci = 0; ci < colorSets.length; ci++) {
+          try {
+            var res = OCR.readLine(img, fonts[fi], colorSets[ci], 0, yOffsets[yi], true, false);
+            if (!res) continue;
+            var text = (typeof res === 'string') ? res : (res.text || '');
+            if (!text || text.length < 2) continue;
 
-        log('ocr y=' + yOffsets[yi] + ' c=' + ci + ': "' + text + '"');
+            log('f=' + fi + ' y=' + yOffsets[yi] + ' c=' + ci + ': "' + text + '"');
 
-        // The input line starts with "PlayerName" followed by a non-name character
-        // (◆ U+25C6, ♦ U+2666, a colon, or a space).  We extract up to 12 chars.
-        var m = text.match(/^([A-Za-z0-9][A-Za-z0-9 \-]{1,11})(?:[^A-Za-z0-9 \-]|$)/);
-        if (m) {
-          var name = m[1].trim();
-          if (name.length >= 2) {
-            log('ocr: name from input line — "' + name + '"');
-            setDetectedName(name);
-            updateStatus(queueData.length > 0 ? queueData : null);
-            updateQueueList(queueData.length > 0 ? queueData : null);
-            return true;
-          }
+            // Name is everything before the first non-name char (◆ colon space etc.)
+            var m = text.match(/^([A-Za-z0-9][A-Za-z0-9 \-]{1,11})(?:[^A-Za-z0-9 \-]|$)/);
+            if (m) {
+              var name = m[1].trim();
+              if (name.length >= 2) {
+                log('ocr: name — "' + name + '"');
+                setDetectedName(name);
+                updateStatus(queueData.length > 0 ? queueData : null);
+                updateQueueList(queueData.length > 0 ? queueData : null);
+                return true;
+              }
+            }
+          } catch (e2) { /* skip bad combo silently */ }
         }
       }
     }
-    log('ocr: no name matched in input line');
+    log('ocr: no match across ' + fonts.length + ' fonts');
   } catch (e) {
-    log('tryNameFromInputLine error: ' + e);
+    log('tryNameFromInputLine: ' + e);
   }
   return false;
 }
 
 /** Called once the chatbox pos is known. Starts the read loop and OCR name detection. */
 function startChatReading() {
-  log('startChatReading: launching read + name-detect loops');
+  log('startChatReading: launching loops');
 
-  // ── Chat read loop — populates chatReader.font and provides a chat-history fallback
+  // ── Chat read loop — chat-history fallback for name + keeps chatReader.font updated
   setInterval(function () {
     try {
       var lines = chatReader.read();
+      log('read(): ' + (lines ? lines.length : 'null') + ' lines, font=' + !!chatReader.font);
 
-      // Chat-history fallback: look for the player's own public chat messages
       if (!detectedName && lines && lines.length > 0) {
         var reName = /^\[\d{1,2}:\d{2}:\d{2}\] (?!\[)(?!\*)([A-Za-z0-9][A-Za-z0-9 \-]{0,11}):\s/;
         var counts = {};
@@ -210,7 +238,7 @@ function startChatReading() {
           if (counts[n] > bestCount) { bestCount = counts[n]; best = n; }
         }
         if (best) {
-          log('chat-history fallback: "' + best + '" (' + bestCount + 'x)');
+          log('chat fallback: "' + best + '" (' + bestCount + 'x)');
           setDetectedName(best);
           updateStatus(queueData.length > 0 ? queueData : null);
           updateQueueList(queueData.length > 0 ? queueData : null);
@@ -219,18 +247,14 @@ function startChatReading() {
     } catch (e) { log('read loop: ' + e); }
   }, 500);
 
-  // ── Input-line OCR loop — try every 2 s until a name is found
-  // Give the read loop one full second first so chatReader.font gets populated.
-  setTimeout(function () {
-    if (detectedName) return;
-    log('ocr: first attempt...');
-    tryNameFromInputLine();
-  }, 1000);
+  // ── Input-line OCR — first attempt immediately, then every 2 s
+  log('ocr: first attempt...');
+  tryNameFromInputLine();
 
   nameDetectTimer = setInterval(function () {
     if (detectedName) {
       clearInterval(nameDetectTimer);
-      log('ocr: name confirmed "' + detectedName + '" — stopping detect loop');
+      log('ocr: stopped (name="' + detectedName + '")');
       return;
     }
     tryNameFromInputLine();
@@ -248,6 +272,7 @@ function initChatbox() {
            : (typeof mixColor === 'function') ? mixColor
            : null;
     if (mc) {
+      // readargs only expects { colors } — no extra fields
       chatReader.readargs = {
         colors: [
           mc(69,  131, 145),   // name teal
@@ -255,7 +280,6 @@ function initChatbox() {
           mc(255, 255, 255),   // white
           mc(127, 169, 255),   // public blue
         ],
-        backwards: true,
       };
       log('readargs set (' + chatReader.readargs.colors.length + ' colours)');
     } else {
