@@ -71,13 +71,9 @@ body.nis {
 
 .vgt-title {
   font-family: 'rs-pro-3', serif;
-  font-size: 18px;
-  background: linear-gradient(180deg, #ffe066 0%, #c8960c 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  letter-spacing: 0.5px;
-  filter: drop-shadow(0 1px 4px rgba(200, 150, 12, 0.5));
+  font-size: 17px;
+  color: #ffffff;
+  letter-spacing: 0.4px;
 }
 
 /* ── Status Dot ─────────────────────────────────────────────────── */
