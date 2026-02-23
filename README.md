@@ -4,9 +4,9 @@ An Alt1 Toolkit plugin for Vorkath Grandmaster carry sessions. It reads the carr
 
 ## Installation
 
-1. Install [Alt1 Toolkit](https://runeapps.org/alt1).
-2. Open `install.html` in your browser, or click the **Add to Alt1** button on the GitHub Pages site.
-3. Confirm the prompt in Alt1.
+[![Install in Alt1](https://img.shields.io/badge/Install_in-Alt1_Toolkit-c98736?style=for-the-badge&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABhSURBVDhPY/j//z8DEIMBIwMKwCdJECRBDmBioBIYNRgZkIIYJERNp/7//59BkJuNAUMjAwMDg5+jOQM2jTBNYIkzl+4zCHKxYWrEpgkscebyPQZBbnZMjbg0gSUoAQBZhCEPfNkKxgAAAABJRU5ErkJggg==)](https://rssaltea.github.io/vorkath-gm-timer/install.html)
+
+> Requires [Alt1 Toolkit](https://runeapps.org/alt1) to be installed.
 
 ## Features
 
@@ -17,7 +17,7 @@ An Alt1 Toolkit plugin for Vorkath Grandmaster carry sessions. It reads the carr
   - You reach #1 (🐉 "It's your turn!")
 - **Queue tab** — shows the full list with your position highlighted.
 - **Audio alerts** — distinct sounds for "get ready" and "your turn".
-- **Auto-refreshes** every 30 seconds; manual refresh available.
+- **Auto-refreshes** every 10 seconds; manual refresh available.
 
 ## Queue data
 
