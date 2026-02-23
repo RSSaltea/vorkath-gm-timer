@@ -33,6 +33,7 @@ let _rawOcrLogged     = false;   // separate flag: log raw OCR result once
 let _lrbufLogged      = false;   // separate flag: log lastReadBuffer info once
 let _linesLogged      = false;   // log first batch of read() lines once
 let _rclLogged        = false;   // log readChatLine() attempt once
+let _lastNoMatchLog   = 0;       // timestamp: suppress repeated "no match" spam
 
 // ── Debug log ─────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ function log(msg) {
     d.className = 'vgt-debug-entry';
     d.textContent = new Date().toLocaleTimeString() + '  ' + String(msg);
     out.prepend(d);
-    while (out.childElementCount > 80) out.removeChild(out.lastChild);
+    while (out.childElementCount > 300) out.removeChild(out.lastChild);
   } catch (e) {}
 }
 
@@ -311,7 +312,8 @@ function tryNameFromLastBuffer() {
       updateQueueList(queueData.length > 0 ? queueData : null);
       return true;
     }
-    log('lrbuf: no match');
+    var _nm = Date.now();
+    if (_nm - _lastNoMatchLog > 20000) { _lastNoMatchLog = _nm; log('lrbuf: no match (still trying...)'); }
   } catch (e) { log('lrbuf err: ' + e); }
   return false;
 }
@@ -352,7 +354,11 @@ function tryNameFromInputLine() {
     var img = imgRef.toData ? imgRef.toData() : imgRef;
     if (!img || !img.data) { log('ocr: no img.data'); return false; }
 
-    log('ocr: img ' + img.width + 'x' + img.height + ' at (' + capX + ',' + capY + ')');
+    // Only log img/brightest details once every 30s to keep the debug buffer usable
+    var _capNow = Date.now();
+    var _logCap = (_capNow - _lastNoMatchLog > 20000);
+
+    if (_logCap) log('ocr: img ' + img.width + 'x' + img.height + ' at (' + capX + ',' + capY + ')');
 
     // ── Pixel scan: find the brightest pixel to verify we got real screen data ──
     var pSum = 0, pR = 0, pG = 0, pB = 0, pY = 0, pX = 0;
@@ -363,7 +369,7 @@ function tryNameFromInputLine() {
         if (s > pSum) { pSum = s; pR = img.data[i4]; pG = img.data[i4+1]; pB = img.data[i4+2]; pY = py; pX = px; }
       }
     }
-    log('ocr: brightest px=(' + pX + ',' + pY + ') rgb(' + pR + ',' + pG + ',' + pB + ') sum=' + pSum);
+    if (_logCap) log('ocr: brightest px=(' + pX + ',' + pY + ') rgb(' + pR + ',' + pG + ',' + pB + ') sum=' + pSum);
     if (pSum < 90) { log('ocr: capture is black — coordinate mismatch?'); return false; }
 
     var mc = A1lib.mixColor || (typeof mixColor === 'function' ? mixColor : null);
@@ -432,7 +438,8 @@ function tryNameFromInputLine() {
       } catch (efl) { log('findReadLine: ' + efl); }
     }
 
-    log('ocr: no match (fonts=' + fonts.length + ')');
+    var _nm2 = Date.now();
+    if (_nm2 - _lastNoMatchLog > 20000) { _lastNoMatchLog = _nm2; log('ocr: no match (fonts=' + fonts.length + ')'); }
   } catch (e) {
     log('tryNameFromInputLine: ' + e);
   }
@@ -823,7 +830,7 @@ async function refresh() {
 // ── Initialise ────────────────────────────────────────────────────
 
 function init() {
-  log('=== VGT v2.4 init ===');   // version banner — confirms which file loaded
+  log('=== VGT v2.5 init ===');   // version banner — confirms which file loaded
 
   // ── Load cached name immediately so the UI shows it before the first refresh
   try {
