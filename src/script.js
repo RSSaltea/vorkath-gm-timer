@@ -13,7 +13,7 @@ const SHEET_NAME  = 'List';
 const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
 
 const GAS_URL = 'https://script.google.com/macros/s/' +
-                'AKfycbyllvoQIv-NnfYbrsOcEDmxTu-E-X0OrqjOlRZ_MoB9otLcmHLvfVxuYn1RfXcEAnajjg' +
+                'AKfycbyIyCxM9h5A-Vhf7ui38DuNExnX9-9k7Nk78W2ZlwYdHrZe5MtMdkiX_V60oxvwN8CS' +
                 '/exec';
 
 // ── State ─────────────────────────────────────────────────────────
