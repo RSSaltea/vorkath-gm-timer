@@ -12,10 +12,9 @@ const SHEET_ID    = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
 const SHEET_NAME  = 'List';
 const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
 
-const FORM_POST_URL = 'https://docs.google.com/forms/d/e/' +
-                      '1FAIpQLSd_D9dhB-4fOtp1tFmkzyD-ez9rScat76I15GfpoAlREvas7g' +
-                      '/formResponse';
-const FORM_ENTRY    = 'entry.1456397394';  // "Your RuneScape name?" field
+const GAS_URL = 'https://script.google.com/macros/s/' +
+                'AKfycbyllvoQIv-NnfYbrsOcEDmxTu-E-X0OrqjOlRZ_MoB9otLcmHLvfVxuYn1RfXcEAnajjg' +
+                '/exec';
 
 // ── State ─────────────────────────────────────────────────────────
 let queueData     = [];   // current full queue (array of strings)
@@ -51,13 +50,6 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-function escapeAttr(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
 
 /** Return the player name typed into the input field. */
 function getEffectiveName() {
@@ -294,7 +286,7 @@ async function refresh() {
 
 // ── Join Queue ────────────────────────────────────────────────────
 
-function joinQueue() {
+async function joinQueue() {
   var name = getEffectiveName();
   if (!name) return;
 
@@ -302,42 +294,22 @@ function joinQueue() {
   btn.disabled    = true;
   btn.textContent = 'Submitting...';
 
-  // Build a self-contained HTML page that auto-submits the form.
-  // Loading it via srcdoc means the form lives in its own document —
-  // same-origin to itself — so form.submit() is not a cross-origin call.
-  var fbzx = String(Math.floor(Math.random() * 9e15));
-  var safeValue = escapeAttr(name);
-  var srcdoc = [
-    '<!doctype html><html><body>',
-    '<form id="f" method="POST" action="' + FORM_POST_URL + '">',
-    '<input type="hidden" name="' + FORM_ENTRY + '" value="' + safeValue + '">',
-    '<input type="hidden" name="fvv" value="1">',
-    '<input type="hidden" name="pageHistory" value="0">',
-    '<input type="hidden" name="fbzx" value="' + fbzx + '">',
-    '</form>',
-    '<script>document.getElementById("f").submit();<\/script>',
-    '</body></html>',
-  ].join('');
+  try {
+    var resp = await fetch(GAS_URL + '?name=' + encodeURIComponent(name));
+    var data = await resp.json();
+    btn.textContent = data.ok ? '✓ Joined queue!' : '✗ Failed — try again';
+  } catch (e) {
+    console.warn('[VGT] Join queue error:', e);
+    btn.textContent = '✗ Error — try again';
+  }
 
-  var iframe = document.createElement('iframe');
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.tabIndex = -1;
-  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
-  iframe.srcdoc = srcdoc;
-  document.body.appendChild(iframe);
-
-  setTimeout(function() {
-    try { iframe.remove(); } catch (e) {}
-  }, 10000);
-
-  btn.textContent = '✓ Submitted!';
   btn.classList.add('submitted');
   setTimeout(function() {
     btn.textContent = '+ Join Queue';
     btn.disabled    = false;
     btn.classList.remove('submitted');
     refresh();
-  }, 5000);
+  }, 4000);
 }
 
 // ── Initialise ────────────────────────────────────────────────────
