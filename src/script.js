@@ -11,7 +11,7 @@
 // ── Config ────────────────────────────────────────────────────────
 const SHEET_ID       = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
 const SHEET_NAME     = 'List';
-const REFRESH_MS     = 30_000;   // auto-refresh interval (30 s)
+const REFRESH_MS     = 10_000;   // auto-refresh interval (10 s)
 
 // ── State ─────────────────────────────────────────────────────────
 let detectedName  = '';   // name read from Alt1
@@ -20,7 +20,7 @@ let wasFirst      = false;
 let wasInTopThree = false;
 let refreshTimer  = null;
 
-// ── Chatbox reader (for player-name detection fallback) ───────────
+// ── Chatbox reader ────────────────────────────────────────────────
 let chatReader = null;
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -87,23 +87,24 @@ function detectName() {
     return;
   }
 
-  // Tertiary: try reading from chatbox (the name appears in the bottom-left
-  // of the RS interface; Alt1's Chatbox library can expose it)
-  tryReadNameFromChat();
+  // Tertiary: no further fallback — chatbox is initialised separately
 }
 
-function tryReadNameFromChat() {
+function initChatbox() {
+  if (typeof alt1 === 'undefined') return;
   try {
-    if (typeof Chatbox === 'undefined') return;
-    if (!chatReader) {
-      chatReader = Chatbox.default();
-    }
-    // Alt1 chatbox exposes the player name via rsPlayerName after
-    // the reader is initialised, or via the first chat message prefix.
-    var name = chatReader.rsPlayerName || chatReader.playerName || '';
-    if (name) setDetectedName(name);
+    var ReaderClass = (typeof ChatboxReader !== 'undefined') ? ChatboxReader
+                    : (typeof Chatbox       !== 'undefined') ? (Chatbox.default || Chatbox)
+                    : null;
+    if (!ReaderClass) return;
+    chatReader = new ReaderClass();
+    // Polling .read() every 600 ms makes Alt1 display the capture-box
+    // overlay on the RS client so users can see the plugin is active.
+    setInterval(function () {
+      try { chatReader.read(); } catch (e) {}
+    }, 600);
   } catch (e) {
-    // Chatbox not available / not in Alt1
+    // Chatbox library not available
   }
 }
 
@@ -396,6 +397,9 @@ function init() {
         .catch(function() {});
     } catch (e) {}
   }
+
+  // ── Start chatbox reader (shows Alt1 capture overlay)
+  initChatbox();
 
   // ── Initial load
   refresh();
