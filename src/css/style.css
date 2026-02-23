@@ -449,11 +449,11 @@ body.nis {
   font-size: 13px;
 }
 
-/* ── Scrollbar ───────────────────────────────────────────────────── */
-.normalscroll::-webkit-scrollbar       { width: 4px; }
-.normalscroll::-webkit-scrollbar-track { background: transparent; }
-.normalscroll::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
-.normalscroll::-webkit-scrollbar-thumb:hover { background: #44445a; }
+/* ── Scrollbar — override NIS yellow scrollbar everywhere ────────── */
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #44445a; }
 
 /* ── Debug Log ───────────────────────────────────────────────────── */
 .vgt-debug-log {

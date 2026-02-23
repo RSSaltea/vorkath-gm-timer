@@ -90,15 +90,11 @@ function getEffectiveName() {
 function detectName() {
   if (typeof alt1 === 'undefined') return;
 
-  log('detectName: rsPlayerName="' + alt1.rsPlayerName + '" rsProfileName="' + alt1.rsProfileName + '"');
-
-  // Primary: direct property on the alt1 object
   if (alt1.rsPlayerName && alt1.rsPlayerName !== '') {
     setDetectedName(alt1.rsPlayerName);
     return;
   }
 
-  // Secondary: profile name
   if (alt1.rsProfileName && alt1.rsProfileName !== '') {
     setDetectedName(alt1.rsProfileName);
     return;
@@ -145,17 +141,26 @@ function initChatbox() {
             setInterval(function () {
               try {
                 var lines = chatReader.read();
-                if (lines && lines.length > 0) {
-                  log('read() got ' + lines.length + ' line(s): ' + JSON.stringify(lines[0]));
-                  // Try to extract player name from a "who" field
-                  if (!detectedName) {
-                    for (var i = 0; i < lines.length; i++) {
-                      if (lines[i].who) {
-                        log('name from chat: ' + lines[i].who);
-                        setDetectedName(lines[i].who);
-                        break;
-                      }
-                    }
+                if (lines && lines.length > 0 && !detectedName) {
+                  // Parse "Name" from "[HH:MM:SS] Name: message" — public chat only
+                  // (skip [GC]/[FC]/[CC] channel prefixes and * system messages)
+                  var reName = /^\[\d{1,2}:\d{2}:\d{2}\] (?!\[)(?!\*)([A-Za-z0-9][A-Za-z0-9 \-]{0,11}):\s/;
+                  var counts = {};
+                  for (var i = 0; i < lines.length; i++) {
+                    if (!lines[i].text) continue;
+                    var m = lines[i].text.match(reName);
+                    if (m) { counts[m[1]] = (counts[m[1]] || 0) + 1; }
+                  }
+                  // Pick the name that appears most often in the visible history
+                  var best = null, bestCount = 0;
+                  for (var n in counts) {
+                    if (counts[n] > bestCount) { bestCount = counts[n]; best = n; }
+                  }
+                  if (best) {
+                    log('name from chat (seen ' + bestCount + 'x): "' + best + '"');
+                    setDetectedName(best);
+                    updateStatus(queueData.length > 0 ? queueData : null);
+                    updateQueueList(queueData.length > 0 ? queueData : null);
                   }
                 }
               } catch (e) { log('read error: ' + e); }
