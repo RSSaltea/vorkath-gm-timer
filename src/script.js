@@ -93,24 +93,55 @@ function detectName() {
 
 /**
  * Collect all font definitions available from the Chatbox module.
- * Tries several property names since UMD export shape varies by version.
+ * chatReader.font may be the outer {name,lineheight,dy,def} wrapper
+ * OR the inner FontDefinition {chars,basey,width,...} directly.
+ * We always pass the inner def to OCR.readLine.
  */
 function getChatFonts() {
   var fonts = [];
-  if (chatReader && chatReader.font) fonts.push(chatReader.font);
+
+  if (chatReader && chatReader.font) {
+    var cf = chatReader.font;
+    if (cf.def && cf.def.chars) {
+      // Outer wrapper — OCR needs the inner def
+      fonts.push(cf.def);
+      log('getChatFonts: using chatReader.font.def (basey=' + cf.def.basey + ' h=' + cf.def.height + ')');
+    } else if (cf.chars) {
+      // Already the inner FontDefinition
+      fonts.push(cf);
+      log('getChatFonts: using chatReader.font directly (basey=' + cf.basey + ' h=' + cf.height + ')');
+    } else {
+      // Unknown structure — log it and try anyway
+      log('getChatFonts: unknown font struct, keys=' + Object.keys(cf).join(','));
+      fonts.push(cf);
+    }
+  }
 
   if (typeof Chatbox !== 'undefined') {
+    // Try several possible export shapes for the bundled fonts array
     var arr = Chatbox.fonts || Chatbox.chatfonts
             || (Chatbox.default && (Chatbox.default.fonts || Chatbox.default.chatfonts));
     if (Array.isArray(arr)) {
       for (var i = 0; i < arr.length; i++) {
-        if (arr[i] && arr[i].def) fonts.push(arr[i].def);
+        var f = arr[i];
+        if (!f) continue;
+        if (f.def && f.def.chars) fonts.push(f.def);
+        else if (f.chars)         fonts.push(f);
       }
-      log('getChatFonts: ' + arr.length + ' bundled fonts');
+      log('getChatFonts: +' + arr.length + ' bundled fonts');
     } else {
-      // Log actual export keys to help diagnose
-      log('getChatFonts: Chatbox.fonts undef — Chatbox keys=' + Object.keys(Chatbox).join(','));
+      // Log keys of Chatbox.default to help track down the fonts array
+      if (Chatbox.default && typeof Chatbox.default === 'function') {
+        try {
+          log('getChatFonts: Chatbox.default own keys=' +
+              Object.getOwnPropertyNames(Chatbox.default).join(','));
+        } catch(e2) {}
+      }
     }
+  }
+
+  if (fonts.length === 0) {
+    log('getChatFonts: no fonts found — will retry when chatReader.font is set');
   }
   return fonts;
 }
@@ -191,12 +222,13 @@ function tryNameFromInputLine() {
 
             log('f=' + fi + ' y=' + yo + ' c=' + ci + ': "' + text + '"');
 
-            // ── Strategy B: anchor "◆:" or ": [" — user's suggestion ──────────
-            // Input line is "Name◆: [Public Chat - Press Enter to Chat]"
-            // Finding ": [" or "◆:" tells us exactly where the name ends.
+            // ── Strategy B: anchor ": [Public Chat" ────────────────────────
+            // The icon between the name and ": [" is a speech-bubble GRAPHIC
+            // (not a text character), so OCR will skip it.
+            // Result will be "Saltea: [Public Chat..." or "Saltea [Public Chat..."
+            // Find ": [" or " [" → everything to the left is the name.
             var anchorIdx = text.indexOf(': [');
-            if (anchorIdx < 0) anchorIdx = text.indexOf(':[');
-            if (anchorIdx < 0) anchorIdx = text.indexOf('\u25c6');   // ◆ U+25C6
+            if (anchorIdx < 0) anchorIdx = text.indexOf(' [');
             if (anchorIdx > 0) {
               var before = text.substring(0, anchorIdx).trim();
               var mB = before.match(/([A-Za-z0-9][A-Za-z0-9 \-]*)$/);
