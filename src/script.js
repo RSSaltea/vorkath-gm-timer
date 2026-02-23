@@ -91,22 +91,29 @@ function detectName() {
 }
 
 function initChatbox() {
-  if (typeof alt1 === 'undefined') return;
-  if (typeof Chatbox === 'undefined') return;
+  if (typeof alt1 === 'undefined') { console.log('[VGT] alt1 not defined, skipping chatbox'); return; }
+  if (typeof Chatbox === 'undefined') { console.log('[VGT] Chatbox not defined, skipping chatbox'); return; }
   try {
     chatReader = new Chatbox.default();
+    console.log('[VGT] chatReader created:', chatReader);
 
-    // Tell the reader which chat text colours to scan for.
-    if (typeof mixColor === 'function') {
+    // mixColor lives on A1lib in the browser UMD build, not as a plain global.
+    var mc = (typeof mixColor === 'function') ? mixColor
+           : (typeof A1lib !== 'undefined' && A1lib.mixColor) ? A1lib.mixColor
+           : null;
+    if (mc) {
       chatReader.readargs = {
         colors: [
-          mixColor(69,  131, 145),   // name colour
-          mixColor(153, 255, 153),   // green text
-          mixColor(255, 255, 255),   // white text
-          mixColor(127, 169, 255),   // public chat blue
+          mc(69,  131, 145),   // name colour
+          mc(153, 255, 153),   // green text
+          mc(255, 255, 255),   // white text
+          mc(127, 169, 255),   // public chat blue
         ],
         backwards: true,
       };
+      console.log('[VGT] readargs set');
+    } else {
+      console.warn('[VGT] mixColor not found, using default readargs');
     }
 
     // Wrap in setTimeout so Alt1 has time to finish app identification first.
@@ -114,14 +121,16 @@ function initChatbox() {
       var finder = setInterval(function () {
         try {
           if (!chatReader.pos) {
+            console.log('[VGT] calling find()...');
             chatReader.find();
           } else {
+            console.log('[VGT] chatbox found at', chatReader.pos);
             clearInterval(finder);
             setInterval(function () {
-              try { chatReader.read(); } catch (e) {}
+              try { chatReader.read(); } catch (e) { console.error('[VGT] read error:', e); }
             }, 250);
           }
-        } catch (e) {}
+        } catch (e) { console.error('[VGT] finder error:', e); }
       }, 800);
     }, 50);
 
@@ -129,10 +138,10 @@ function initChatbox() {
     setInterval(function () {
       try {
         if (chatReader && !chatReader.pos) { chatReader.find(); }
-      } catch (e) {}
+      } catch (e) { console.error('[VGT] ensureFound error:', e); }
     }, 2000);
   } catch (e) {
-    // Chatbox library not available
+    console.error('[VGT] initChatbox error:', e);
   }
 }
 
