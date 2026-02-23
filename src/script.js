@@ -96,20 +96,28 @@ function initChatbox() {
   try {
     chatReader = new Chatbox.default();
 
-    // find() locates the chatbox on screen and makes the green overlay appear.
-    // Keep calling it until reader.pos is set, then switch to read().
-    var finder = setInterval(function () {
+    // Wrap in setTimeout so Alt1 has time to finish app identification first.
+    setTimeout(function () {
+      var finder = setInterval(function () {
+        try {
+          if (!chatReader.pos) {
+            chatReader.find();
+          } else {
+            clearInterval(finder);
+            setInterval(function () {
+              try { chatReader.read(); } catch (e) {}
+            }, 250);
+          }
+        } catch (e) {}
+      }, 800);
+    }, 50);
+
+    // Periodically re-run find() in case the chatbox moves or loses position.
+    setInterval(function () {
       try {
-        if (!chatReader.pos) {
-          chatReader.find();
-        } else {
-          clearInterval(finder);
-          setInterval(function () {
-            try { chatReader.read(); } catch (e) {}
-          }, 600);
-        }
+        if (chatReader && !chatReader.pos) { chatReader.find(); }
       } catch (e) {}
-    }, 800);
+    }, 2000);
   } catch (e) {
     // Chatbox library not available
   }
@@ -393,15 +401,10 @@ function init() {
   document.getElementById('refresh-btn').addEventListener('click', refresh);
   document.getElementById('refresh-btn-queue').addEventListener('click', refresh);
 
-  // ── Identify app to Alt1 (loads appconfig.json)
+  // ── Identify app to Alt1 (grants pixel/gamestate permissions)
   if (typeof alt1 !== 'undefined') {
     try {
-      fetch('./appconfig.json')
-        .then(function(r) { return r.json(); })
-        .then(function(cfg) {
-          if (alt1.identifyApp) alt1.identifyApp(JSON.stringify(cfg));
-        })
-        .catch(function() {});
+      alt1.identifyAppUrl('./appconfig.json');
     } catch (e) {}
   }
 
