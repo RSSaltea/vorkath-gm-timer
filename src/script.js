@@ -8,9 +8,14 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────
-const SHEET_ID   = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
-const SHEET_NAME = 'List';
-const REFRESH_MS = 10_000;   // auto-refresh interval (10 s)
+const SHEET_ID    = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
+const SHEET_NAME  = 'List';
+const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
+
+const FORM_URL    = 'https://docs.google.com/forms/d/e/' +
+                    '1FAIpQLSd_D9dhB-4fOtp1tFmkzyD-ez9rScat76I15GfpoAlREvas7g' +
+                    '/formResponse';
+const FORM_ENTRY  = 'entry.1456397394';  // "Your RuneScape name?" field
 
 // ── State ─────────────────────────────────────────────────────────
 let queueData     = [];   // current full queue (array of strings)
@@ -75,6 +80,8 @@ function updateStatus(queue) {
   var alertSub   = document.getElementById('alert-sub');
   var posEl      = document.getElementById('queue-position');
 
+  var joinBtn = document.getElementById('join-queue-btn');
+
   // ── failed to load
   if (!queue) {
     setCard(alertCard, 'error');
@@ -82,6 +89,7 @@ function updateStatus(queue) {
     alertTitle.textContent = 'Failed to load queue';
     alertSub.textContent   = 'Check your internet connection';
     posEl.textContent      = '—';
+    joinBtn.style.display  = 'none';
     return;
   }
 
@@ -94,6 +102,7 @@ function updateStatus(queue) {
     alertTitle.textContent = 'No name set';
     alertSub.textContent   = 'Enter your RS name in the box above';
     posEl.textContent      = '—';
+    joinBtn.style.display  = 'none';
     return;
   }
 
@@ -113,10 +122,13 @@ function updateStatus(queue) {
     alertTitle.textContent = 'Not in queue';
     alertSub.textContent   = 'You are not currently listed';
     posEl.textContent      = '—';
+    joinBtn.style.display  = 'block';
     wasInTopThree = false;
     wasFirst      = false;
     return;
   }
+
+  joinBtn.style.display = 'none';
 
   posEl.textContent = '#' + rank;
 
@@ -272,6 +284,36 @@ async function refresh() {
   updateTimestamp();
 }
 
+// ── Join Queue ────────────────────────────────────────────────────
+
+function joinQueue() {
+  var name = getEffectiveName();
+  if (!name) return;
+
+  var btn = document.getElementById('join-queue-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Submitting...';
+
+  fetch(FORM_URL, {
+    method:  'POST',
+    mode:    'no-cors',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    FORM_ENTRY + '=' + encodeURIComponent(name),
+  }).then(function() {
+    btn.textContent = '✓ Submitted — refreshing in 5s';
+    btn.classList.add('submitted');
+    setTimeout(function() {
+      btn.textContent = '+ Join Queue';
+      btn.disabled    = false;
+      btn.classList.remove('submitted');
+      refresh();
+    }, 5000);
+  }).catch(function() {
+    btn.textContent = 'Failed — tap to retry';
+    btn.disabled    = false;
+  });
+}
+
 // ── Initialise ────────────────────────────────────────────────────
 
 function init() {
@@ -303,6 +345,9 @@ function init() {
     updateStatus(queueData.length > 0 ? queueData : null);
     updateQueueList(queueData.length > 0 ? queueData : null);
   });
+
+  // ── Join Queue button
+  document.getElementById('join-queue-btn').addEventListener('click', joinQueue);
 
   // ── Refresh buttons
   document.getElementById('refresh-btn').addEventListener('click', refresh);

@@ -459,31 +459,32 @@ body.nis {
 ::-webkit-scrollbar-thumb:hover { background: #44445a !important; background-image: none !important; }
 ::-webkit-scrollbar-corner      { background: transparent !important; }
 
-/* ── Debug Log ───────────────────────────────────────────────────── */
-.vgt-debug-log {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  background: #010409;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 6px 8px;
-  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
-  font-size: 10px;
-  color: #7d8590;
+/* ── Join Queue Button ───────────────────────────────────────────── */
+.vgt-join-btn {
+  display: none;       /* shown by JS only when player is not in queue */
+  width: 100%;
+  padding: 10px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.2s, background 0.2s;
 }
 
-.vgt-debug-entry {
-  padding: 1px 0;
-  border-bottom: 1px solid #21262d28;
-  line-height: 1.5;
-  word-break: break-all;
+.vgt-join-btn:hover:not(:disabled) {
+  opacity: 0.85;
 }
 
-.vgt-debug-entry:first-child {
-  color: #adbac7;
+.vgt-join-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
 }
 
-.vgt-debug-entry.muted {
-  color: #444;
+.vgt-join-btn.submitted {
+  background: var(--turn);
 }
