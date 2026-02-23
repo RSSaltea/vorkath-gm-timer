@@ -30,6 +30,7 @@ let _ocrKeysLogged    = false;
 let _lastFontState    = false;
 let _mcLogged         = false;   // separate flag: log mc() packed format once
 let _rawOcrLogged     = false;   // separate flag: log raw OCR result once
+let _lrbufLogged      = false;   // separate flag: log lastReadBuffer info once
 
 // ── Debug log ─────────────────────────────────────────────────────
 
@@ -187,6 +188,113 @@ function getChatFonts() {
 }
 
 /**
+ * OCR helper: run readLine strategies A+B on a decoded text string.
+ * Returns the extracted name, or null.
+ */
+function extractNameFromOcrText(text) {
+  // Strategy B: anchor ": [" or " ["
+  var ai = text.indexOf(': [');
+  if (ai < 0) ai = text.indexOf(' [');
+  if (ai > 0) {
+    var before = text.substring(0, ai).trim();
+    var mB = before.match(/([A-Za-z0-9][A-Za-z0-9 \-]*)$/);
+    if (mB && mB[1].trim().length >= 2) return mB[1].trim();
+  }
+  // Strategy A: prefix
+  var mA = text.match(/^([A-Za-z0-9][A-Za-z0-9 \-]{1,11})(?:[^A-Za-z0-9 \-]|$)/);
+  if (mA && mA[1].trim().length >= 2) return mA[1].trim();
+  return null;
+}
+
+/**
+ * OCR helper: run readLine over a y-range within an ImageData.
+ * Returns the first useful decoded name, or null.
+ * prefix — short tag for log messages (e.g. "cap" or "lrbuf")
+ */
+function ocrYRange(img, fonts, colorSets, minY, maxY, prefix) {
+  for (var fi = 0; fi < fonts.length; fi++) {
+    for (var yo = minY; yo <= maxY; yo++) {
+      for (var ci = 0; ci < colorSets.length; ci++) {
+        try {
+          var res  = OCR.readLine(img, fonts[fi], colorSets[ci], 0, yo, true, false);
+          var text = (typeof res === 'string') ? res : (res ? (res.text || '') : '');
+          if (text.length < 2) continue;
+          // Log raw result once at y=9 for all colors (one-time diagnostics)
+          if (!_rawOcrLogged && yo === 9) {
+            log('raw[' + prefix + '] y=9 c=' + ci + ': "' + text.substring(0, 40) + '"');
+            if (ci === colorSets.length - 1) _rawOcrLogged = true;
+          }
+          // Skip all-same-char results (font-mismatch indicator)
+          var uc = {}; for (var kk = 0; kk < Math.min(text.length, 8); kk++) uc[text[kk]] = 1;
+          if (Object.keys(uc).length === 1 && text.length > 4) continue;
+          log(prefix + ' f=' + fi + ' y=' + yo + ' c=' + ci + ': "' + text + '"');
+          var name = extractNameFromOcrText(text);
+          if (name) return name;
+        } catch (e2) { /* skip bad combo */ }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Try to read the input line from chatReader.lastReadBuffer — the same
+ * ImageData the chatbox uses for decoding messages (which already works).
+ * The input line is at the bottom 18 px of that buffer.
+ */
+function tryNameFromLastBuffer() {
+  if (!chatReader || !chatReader.lastReadBuffer || !chatReader.font) return false;
+  if (typeof OCR === 'undefined' || !OCR.readLine) return false;
+
+  var fonts = getChatFonts();
+  if (fonts.length === 0) return false;
+
+  try {
+    var raw = chatReader.lastReadBuffer;
+    var img = (raw && typeof raw.toData === 'function') ? raw.toData() : raw;
+    if (!img || !img.data) { log('lrbuf: no data'); return false; }
+
+    var mc = A1lib.mixColor || (typeof mixColor === 'function' ? mixColor : null);
+    if (!mc) return false;
+
+    // Log lastReadBuffer info once
+    if (!_lrbufLogged) {
+      _lrbufLogged = true;
+      log('lrbuf: ' + img.width + 'x' + img.height + ' (input line at y=' + (img.height - 18) + ')');
+      // Log chatReader prototype methods — might reveal readFull() or readInputLine()
+      try { log('chatReader proto: ' + Object.getOwnPropertyNames(Object.getPrototypeOf(chatReader)).join(',')); } catch(e) {}
+      // Log alt1 RS-related keys — might expose rsLoginName or rsPlayerName
+      try {
+        var rsKeys = Object.keys(alt1).filter(function(k) { return /rs|player|name|login|char/i.test(k); });
+        log('alt1 rs* keys: ' + rsKeys.join(','));
+      } catch(e) {}
+    }
+
+    if (img.height < 20) { log('lrbuf: buffer too small (' + img.height + ')'); return false; }
+
+    var baseY = img.height - 18;
+    var colorSets = [
+      [mc(255, 255, 255)],
+      [mc(200, 200, 200)],
+      [mc(255, 255,   0)],
+      [mc(127, 169, 255)],
+      [mc( 69, 131, 145)],
+    ];
+
+    var name = ocrYRange(img, fonts, colorSets, baseY, baseY + 17, 'lrbuf');
+    if (name) {
+      log('ocr: name (lrbuf) — "' + name + '"');
+      setDetectedName(name);
+      updateStatus(queueData.length > 0 ? queueData : null);
+      updateQueueList(queueData.length > 0 ? queueData : null);
+      return true;
+    }
+    log('lrbuf: no match');
+  } catch (e) { log('lrbuf err: ' + e); }
+  return false;
+}
+
+/**
  * Try to OCR the chatbox input line, which always reads:
  *   "Saltea◆: [Public Chat - Press Enter to Chat]"
  *
@@ -239,120 +347,61 @@ function tryNameFromInputLine() {
     var mc = A1lib.mixColor || (typeof mixColor === 'function' ? mixColor : null);
     if (!mc) { log('ocr: no mixColor'); return false; }
 
-    // Log the packed-color format once so we can verify it matches OCR expectations
+    // One-time diagnostics: packed-color format, pixel colors, alpha channel
     if (!_mcLogged) {
       _mcLogged = true;
-      var _mcTest = mc(255, 255, 255);
-      log('mc(255,255,255) = 0x' + (_mcTest >>> 0).toString(16).padStart(8, '0'));
-      // Also scan pixel colors across the name area (left side of input line)
-      // to find out what color "Saltea" is actually rendered in
-      var pixScan = 'px y=5:';
-      for (var sx = 0; sx <= 60; sx += 5) {
-        var si = (5 * img.width + sx) * 4;
-        pixScan += ' x' + sx + '=(' + img.data[si] + ',' + img.data[si+1] + ',' + img.data[si+2] + ')';
-      }
-      log(pixScan);
-      var pixScan2 = 'px y=0:';
-      for (var sx2 = 0; sx2 <= 60; sx2 += 5) {
-        var si2 = (0 * img.width + sx2) * 4;
-        pixScan2 += ' x' + sx2 + '=(' + img.data[si2] + ',' + img.data[si2+1] + ',' + img.data[si2+2] + ')';
-      }
-      log(pixScan2);
+      log('mc(255,255,255) = 0x' + (mc(255,255,255) >>> 0).toString(16).padStart(8,'0'));
+      // Alpha at brightest pixel
+      var ai4 = (pY * img.width + pX) * 4;
+      log('brightest alpha = ' + img.data[ai4 + 3]);
+      // Pixel scan at y=0, y=5, y=9 (baseline) across name area
+      ['y=0','y=5','y=9'].forEach(function(label, scanY) {
+        scanY = [0, 5, 9][['y=0','y=5','y=9'].indexOf(label)];
+        var row = label + ':';
+        for (var sx = 0; sx <= 100; sx += 5) {
+          var si = (scanY * img.width + sx) * 4;
+          row += ' x' + sx + '=(' + img.data[si] + ',' + img.data[si+1] + ',' + img.data[si+2] + ')';
+        }
+        log('px ' + row);
+      });
     }
 
     // Colours to try — white for "◆: [Public Chat..." plus other RS chat colours
     var colorSets = [
-      [mc(255, 255, 255)],           // white  (most likely for input line)
-      [mc(200, 200, 200)],           // light grey (anti-aliased white)
+      [mc(255, 255, 255)],           // white
+      [mc(200, 200, 200)],           // light grey
       [mc(160, 160, 160)],           // medium grey
-      [mc(255, 255, 0)],             // yellow
-      [mc(255, 200, 0)],             // gold
+      [mc(255, 255,   0)],           // yellow
+      [mc(255, 200,   0)],           // gold
       [mc(127, 169, 255)],           // public chat blue
-      [mc(69,  131, 145)],           // name teal
+      [mc( 69, 131, 145)],           // name teal
       [mc(153, 255, 153)],           // green
-      [mc(pR, pG, pB)],              // dynamically discovered brightest colour
+      [mc(pR, pG, pB)],              // dynamically discovered brightest
     ];
 
-    // ── OCR every y-baseline across the full captured strip ───────────────────
-    for (var fi = 0; fi < fonts.length; fi++) {
-      for (var yo = 0; yo < capH; yo++) {
-        for (var ci = 0; ci < colorSets.length; ci++) {
-          try {
-            var res  = OCR.readLine(img, fonts[fi], colorSets[ci], 0, yo, true, false);
-            if (!res) continue;
-            var text = (typeof res === 'string') ? res : (res.text || '');
-            if (text.length < 2) continue;
-
-            // Log raw result once (before filtering) to diagnose font/color issues
-            if (!_rawOcrLogged && yo <= 12) {
-              _rawOcrLogged = true;
-              log('raw f=' + fi + ' y=' + yo + ' c=' + ci + ': "' + text.substring(0, 40) + '"');
-            }
-
-            // Skip results where every character is the same (font-mismatch indicator)
-            var uc = {}; for (var kk = 0; kk < Math.min(text.length, 8); kk++) uc[text[kk]] = 1;
-            if (Object.keys(uc).length === 1 && text.length > 4) continue;
-
-            log('f=' + fi + ' y=' + yo + ' c=' + ci + ': "' + text + '"');
-
-            // ── Strategy B: anchor ": [Public Chat" ────────────────────────
-            // The icon between the name and ": [" is a speech-bubble GRAPHIC
-            // (not a text character), so OCR will skip it.
-            // Result will be "Saltea: [Public Chat..." or "Saltea [Public Chat..."
-            // Find ": [" or " [" → everything to the left is the name.
-            var anchorIdx = text.indexOf(': [');
-            if (anchorIdx < 0) anchorIdx = text.indexOf(' [');
-            if (anchorIdx > 0) {
-              var before = text.substring(0, anchorIdx).trim();
-              var mB = before.match(/([A-Za-z0-9][A-Za-z0-9 \-]*)$/);
-              if (mB && mB[1].trim().length >= 2) {
-                log('ocr: name (anchor) — "' + mB[1].trim() + '"');
-                setDetectedName(mB[1].trim());
-                updateStatus(queueData.length > 0 ? queueData : null);
-                updateQueueList(queueData.length > 0 ? queueData : null);
-                return true;
-              }
-            }
-
-            // ── Strategy A: prefix — name is at the very start of the line ────
-            var mA = text.match(/^([A-Za-z0-9][A-Za-z0-9 \-]{1,11})(?:[^A-Za-z0-9 \-]|$)/);
-            if (mA && mA[1].trim().length >= 2) {
-              log('ocr: name (prefix) — "' + mA[1].trim() + '"');
-              setDetectedName(mA[1].trim());
-              updateStatus(queueData.length > 0 ? queueData : null);
-              updateQueueList(queueData.length > 0 ? queueData : null);
-              return true;
-            }
-          } catch (e2) { /* skip bad combo */ }
-        }
-      }
+    // ── Try captureHold OCR ────────────────────────────────────────────────────
+    var capName = ocrYRange(img, fonts, colorSets, 0, capH - 1, 'cap');
+    if (capName) {
+      log('ocr: name (cap) — "' + capName + '"');
+      setDetectedName(capName);
+      updateStatus(queueData.length > 0 ? queueData : null);
+      updateQueueList(queueData.length > 0 ? queueData : null);
+      return true;
     }
-    // ── Try OCR.findReadLine if available — searches y-range automatically ──
+
+    // ── Try OCR.findReadLine if available ─────────────────────────────────────
     if (typeof OCR.findReadLine === 'function') {
       try {
         for (var fci = 0; fci < colorSets.length; fci++) {
           var flr = OCR.findReadLine(img, fonts[0], colorSets[fci], 0, 0, capH - 1);
           if (!flr) continue;
-          var flText = (typeof flr === 'string') ? flr : (flr.text || '');
+          var flText = (typeof flr === 'string') ? flr : (flr ? (flr.text || '') : '');
           if (flText.length < 2) continue;
           log('findReadLine c=' + fci + ': "' + flText + '"');
-          var flAnchor = flText.indexOf(': [');
-          if (flAnchor < 0) flAnchor = flText.indexOf(' [');
-          if (flAnchor > 0) {
-            var flBefore = flText.substring(0, flAnchor).trim();
-            var flM = flBefore.match(/([A-Za-z0-9][A-Za-z0-9 \-]*)$/);
-            if (flM && flM[1].trim().length >= 2) {
-              log('ocr: name (findReadLine) — "' + flM[1].trim() + '"');
-              setDetectedName(flM[1].trim());
-              updateStatus(queueData.length > 0 ? queueData : null);
-              updateQueueList(queueData.length > 0 ? queueData : null);
-              return true;
-            }
-          }
-          var flA = flText.match(/^([A-Za-z0-9][A-Za-z0-9 \-]{1,11})(?:[^A-Za-z0-9 \-]|$)/);
-          if (flA && flA[1].trim().length >= 2) {
-            log('ocr: name (findReadLine) — "' + flA[1].trim() + '"');
-            setDetectedName(flA[1].trim());
+          var flName = extractNameFromOcrText(flText);
+          if (flName) {
+            log('ocr: name (findReadLine) — "' + flName + '"');
+            setDetectedName(flName);
             updateStatus(queueData.length > 0 ? queueData : null);
             updateQueueList(queueData.length > 0 ? queueData : null);
             return true;
@@ -390,9 +439,17 @@ function startChatReading() {
       // Font just became available — trigger input-line OCR immediately
       if (fontNow && !_lastFontState && !detectedName) {
         log('font just set — triggering OCR now');
-        setTimeout(tryNameFromInputLine, 100);
+        setTimeout(function() {
+          if (!detectedName) tryNameFromInputLine();
+          if (!detectedName) tryNameFromLastBuffer();
+        }, 100);
       }
       _lastFontState = fontNow;
+
+      // After each successful read, try lastReadBuffer while it is fresh
+      if (fontNow && !detectedName && lines && lines.length > 0) {
+        setTimeout(tryNameFromLastBuffer, 50);
+      }
     } catch (e) { log('read loop: ' + e); }
   }, 500);
 
@@ -406,7 +463,7 @@ function startChatReading() {
       log('ocr: stopped (name="' + detectedName + '")');
       return;
     }
-    tryNameFromInputLine();
+    if (!tryNameFromInputLine()) tryNameFromLastBuffer();
   }, 2000);
 }
 
