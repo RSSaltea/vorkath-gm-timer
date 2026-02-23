@@ -31,6 +31,8 @@ let _lastFontState    = false;
 let _mcLogged         = false;   // separate flag: log mc() packed format once
 let _rawOcrLogged     = false;   // separate flag: log raw OCR result once
 let _lrbufLogged      = false;   // separate flag: log lastReadBuffer info once
+let _linesLogged      = false;   // log first batch of read() lines once
+let _rclLogged        = false;   // log readChatLine() attempt once
 
 // ── Debug log ─────────────────────────────────────────────────────
 
@@ -273,6 +275,26 @@ function tryNameFromLastBuffer() {
     if (img.height < 20) { log('lrbuf: buffer too small (' + img.height + ')'); return false; }
 
     var baseY = img.height - 18;
+
+    // ── readChatLine diagnostic — run once to see what the internal reader returns
+    if (!_rclLogged && typeof chatReader.readChatLine === 'function') {
+      _rclLogged = true;
+      try {
+        // How many params does it expect?
+        log('readChatLine.length=' + chatReader.readChatLine.length);
+        // Peek at source (may be minified but arg names still visible)
+        log('readChatLine src: ' + chatReader.readChatLine.toString().substring(0, 200));
+        // Try calling at input-line y positions (bottom 18 px of the buffer)
+        for (var ry = baseY; ry <= baseY + 14; ry += 2) {
+          try {
+            var rclR = chatReader.readChatLine(img, ry);
+            if (rclR !== null && rclR !== undefined) {
+              log('rcl y=' + ry + ': ' + JSON.stringify(rclR).substring(0, 120));
+            }
+          } catch (rclE) { log('rcl y=' + ry + ' err: ' + rclE.message); break; }
+        }
+      } catch (e3) { log('readChatLine setup err: ' + e3); }
+    }
     var colorSets = [
       [mc(255, 255, 255)],
       [mc(200, 200, 200)],
@@ -314,11 +336,11 @@ function tryNameFromInputLine() {
 
   var rect = chatReader.pos.mainbox.rect;
 
-  // Capture the bottom 18 px of the chatbox rect — this is always the input line.
+  // Capture the bottom 30 px of the chatbox rect — covers the mode indicator line.
   var capX = rect.x;
-  var capY = rect.y + rect.height - 18;
+  var capH = 30;
+  var capY = rect.y + rect.height - capH;
   var capW = rect.width || 368;
-  var capH = 18;
 
   try {
     // Use alt1.captureHold directly (A1lib is a wrapper but may behave differently)
@@ -421,10 +443,10 @@ function tryNameFromInputLine() {
 function startChatReading() {
   log('startChatReading: launching loops');
   var _lastReadLog = 0;
+  // Log full pos so we know what rect/line0y we have
+  try { log('pos.mainbox: ' + JSON.stringify(chatReader.pos.mainbox)); } catch(e) {}
 
-  // ── Chat read loop — only used to keep chatReader.font updated.
-  // We do NOT read names from chat history; other players' messages would
-  // appear identical to yours and give the wrong name.
+  // ── Chat read loop — keeps chatReader.font updated and scans the input line.
   setInterval(function () {
     try {
       var lines = chatReader.read();
@@ -434,6 +456,45 @@ function startChatReading() {
       if ((lines && lines.length > 0) || now - _lastReadLog > 10000) {
         log('read(): ' + (lines ? lines.length : 'null') + ' lines, font=' + fontNow);
         _lastReadLog = now;
+      }
+
+      // ── One-shot: log the raw structure of lines so we can see what read() returns
+      if (!_linesLogged) {
+        _linesLogged = true;
+        log('_linesLogged fired: lines=' + (lines ? lines.length : 'null') + ' type=' + typeof lines);
+        if (lines && lines.length > 0) {
+          try { log('lines[0] JSON: ' + JSON.stringify(lines[0]).substring(0, 120)); } catch(e) { log('lines[0] JSON err'); }
+          var l0raw = lines[0];
+          log('lines[0] keys: ' + (l0raw && typeof l0raw === 'object' ? Object.keys(l0raw).join(',') : String(l0raw)));
+          for (var ll = 0; ll < Math.min(lines.length, 3); ll++) {
+            var lt = lines[ll] ? (lines[ll].text || String(lines[ll])) : '(null)';
+            log('lines[' + ll + ']: "' + lt.substring(0, 80) + '"');
+          }
+        }
+      }
+
+      // ── Input-line scan — the mode indicator is always:
+      //   "PlayerName◆: [Channel - Press Enter to Chat]"
+      // Regular chat messages are "Name: message" — never have ": [" after the colon
+      // unless someone literally types "[" as first character (extremely rare).
+      if (fontNow && !detectedName && lines && lines.length > 0) {
+        for (var lx = 0; lx < lines.length; lx++) {
+          var lxt = lines[lx] ? (lines[lx].text || String(lines[lx])) : '';
+          var lxai = lxt.indexOf(': [');
+          if (lxai > 0) {
+            var lxbefore = lxt.substring(0, lxai);
+            // Strip leading timestamp "12:34:56 " if present, then grab trailing name
+            var lxm = lxbefore.match(/([A-Za-z0-9][A-Za-z0-9 \-]*)$/);
+            if (lxm && lxm[1].trim().length >= 2) {
+              var lxName = lxm[1].trim();
+              log('line-scan: name "' + lxName + '" via ": [" in lines[' + lx + ']');
+              setDetectedName(lxName);
+              updateStatus(queueData.length > 0 ? queueData : null);
+              updateQueueList(queueData.length > 0 ? queueData : null);
+              break;
+            }
+          }
+        }
       }
 
       // Font just became available — trigger input-line OCR immediately
@@ -762,6 +823,8 @@ async function refresh() {
 // ── Initialise ────────────────────────────────────────────────────
 
 function init() {
+  log('=== VGT v2.4 init ===');   // version banner — confirms which file loaded
+
   // ── Load cached name immediately so the UI shows it before the first refresh
   try {
     var saved = localStorage.getItem('vgt_playerName');
