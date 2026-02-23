@@ -303,41 +303,64 @@ function tryNameFromLastBuffer() {
           var _rect = _mb.rect;
           var _t250 = _cap(_rect.x, _rect.y, _rect.width, 250);  // raw ImgRefBind
           if (_t250) {
-            log('tall250 ref type: ' + typeof _t250);
-            for (var _ln = -1; _ln >= -3; _ln--) {
-              try {
-                var _rln = chatReader.readChatLine(_mb, _t250, 0, 0, _cfO, _rc, _ln);
-                log('rcl[' + _ln + '] tall250: "' + (_rln ? (_rln.text || '').substring(0, 80) : 'null') + '"');
-              } catch(_eln) { log('rcl[' + _ln + '] tall err: ' + _eln.message); break; }
+            log('tall250 ref type: ' + typeof _t250 + ', toData: ' + typeof _t250.toData);
+            if (typeof _t250.toData === 'function') {
+              var _img250d = _t250.toData();
+              log('img250: ' + (_img250d ? _img250d.width + 'x' + _img250d.height : 'null'));
+              if (_img250d && _img250d.height > 226) {
+                // Pixel scan at y=226 (mode indicator baseline) to verify capture
+                var _pr = 'px y=226:';
+                for (var _px = 0; _px <= 100; _px += 10) {
+                  var _pi = (226 * _img250d.width + _px) * 4;
+                  _pr += ' x'+_px+'=('+_img250d.data[_pi]+','+_img250d.data[_pi+1]+','+_img250d.data[_pi+2]+')';
+                }
+                log(_pr);
+                // Try ocrYRange at mode indicator baseline
+                var _cfsDiag = [
+                  [mc(255, 255, 255)], [mc(255, 255, 0)], [mc(200, 200, 200)],
+                  [mc(127, 169, 255)], [mc(153, 255, 153)]
+                ];
+                var _diagName = ocrYRange(_img250d, fonts, _cfsDiag, 220, 232, 'mi250diag');
+                log('mi250diag result: "' + (_diagName || '(none)') + '"');
+              }
+            } else {
+              log('tall250.toData not available — trying readChatLine fallback');
+              for (var _ln = -1; _ln >= -2; _ln--) {
+                try {
+                  var _rln = chatReader.readChatLine(_mb, _t250, 0, 0, _cfO, _rc, _ln);
+                  log('rcl[' + _ln + '] tall250: "' + (_rln ? (_rln.text || '').substring(0, 80) : 'null') + '"');
+                } catch(_eln) { log('rcl[' + _ln + '] tall err: ' + _eln.message); break; }
+              }
             }
           }
         } catch(_etall) { log('rcl tall: ' + _etall); }
       } catch (e3) { log('readChatLine setup err: ' + e3); }
     }
 
-    // ── Main detection: readChatLine(linenr=-1) on 250px capture ─────────────
-    if (typeof chatReader.readChatLine === 'function' && chatReader.pos) {
+    // ── Main detection: 250px capture → OCR.readLine at mode indicator baseline ─
+    // readChatLine needs pixelCompare which isn't available on our ImgRefBind.
+    // OCR.readLine (used by ocrYRange) works with plain ImageData — use that instead.
+    // linenr=-1 baseline: liney = line0y + lineheight + dy = 213 + 16 - 3 = 226.
+    // lastReadBuffer is 225px (y=226 out of bounds) so capture fresh 250px.
+    if (chatReader.pos && fonts.length > 0) {
       try {
-        var _mb2   = chatReader.pos.mainbox;
-        var _rect2 = _mb2.rect;
-        var _cfO2  = chatReader.font;
-        var _rc2   = (chatReader.readargs && chatReader.readargs.colors) ? chatReader.readargs.colors : [];
-        var _t2    = _cap(_rect2.x, _rect2.y, _rect2.width, 250);  // raw ImgRefBind
-        if (_t2) {
-          var _rmi = chatReader.readChatLine(_mb2, _t2, 0, 0, _cfO2, _rc2, -1);
-          if (_rmi && _rmi.text && _rmi.text.length > 1) {
-            log('mode indicator: "' + _rmi.text.substring(0, 80) + '"');
-            var _miName = extractNameFromOcrText(_rmi.text);
-            if (_miName) {
-              log('ocr: name (readChatLine) — "' + _miName + '"');
-              setDetectedName(_miName);
-              updateStatus(queueData.length > 0 ? queueData : null);
-              updateQueueList(queueData.length > 0 ? queueData : null);
-              return true;
-            }
+        var _mirect = chatReader.pos.mainbox.rect;
+        var _miraw  = _cap(_mirect.x, _mirect.y, _mirect.width, 250);
+        var _miImg  = (_miraw && typeof _miraw.toData === 'function') ? _miraw.toData() : null;
+        if (_miImg && _miImg.data && _miImg.height >= 227) {
+          var _miName = ocrYRange(_miImg, fonts, colorSets, 220, 232, 'mi');
+          if (_miName) {
+            log('ocr: name (mi250) — "' + _miName + '"');
+            setDetectedName(_miName);
+            updateStatus(queueData.length > 0 ? queueData : null);
+            updateQueueList(queueData.length > 0 ? queueData : null);
+            return true;
           }
+        } else {
+          var _nm3 = Date.now();
+          if (_nm3 - _lastNoMatchLog > 20000) { _lastNoMatchLog = _nm3; log('mi250: ' + (_miImg ? _miImg.height + 'px (short)' : 'null — toData unavail')); }
         }
-      } catch (_emi) { log('rcl detect err: ' + _emi); }
+      } catch (_emi) { log('mi detect err: ' + _emi); }
     }
 
     var baseY = img.height - 18;
@@ -383,10 +406,13 @@ function tryNameFromInputLine() {
 
   var rect = chatReader.pos.mainbox.rect;
 
-  // Capture the bottom 30 px of the chatbox rect — covers the mode indicator line.
+  // Capture 40px starting 20px before the bottom of the chatbox rect.
+  // Mode indicator baseline (linenr=-1): liney=226 in buffer = screen y=rect.y+226.
+  // rect.y+rect.height = rect.y+225 — baseline is 1px below rect bottom.
+  // Starting at rect.y+rect.height-20 puts baseline at buffer y = 226-(225-20) = 21.
   var capX = rect.x;
-  var capH = 30;
-  var capY = rect.y + rect.height - capH;
+  var capH = 40;
+  var capY = rect.y + rect.height - 20;  // screen y ≈ 966; baseline in buf at y≈21
   var capW = rect.width || 368;
 
   try {
@@ -427,9 +453,9 @@ function tryNameFromInputLine() {
       // Alpha at brightest pixel
       var ai4 = (pY * img.width + pX) * 4;
       log('brightest alpha = ' + img.data[ai4 + 3]);
-      // Pixel scan at y=0, y=5, y=9 (baseline) across name area
-      ['y=0','y=5','y=9'].forEach(function(label, scanY) {
-        scanY = [0, 5, 9][['y=0','y=5','y=9'].indexOf(label)];
+      // Pixel scan at y=12, y=17, y=21 (mode indicator character & baseline area)
+      ['y=12','y=17','y=21'].forEach(function(label, scanY) {
+        scanY = [12, 17, 21][['y=12','y=17','y=21'].indexOf(label)];
         var row = label + ':';
         for (var sx = 0; sx <= 100; sx += 5) {
           var si = (scanY * img.width + sx) * 4;
@@ -452,8 +478,8 @@ function tryNameFromInputLine() {
       [mc(pR, pG, pB)],              // dynamically discovered brightest
     ];
 
-    // ── Try captureHold OCR ────────────────────────────────────────────────────
-    var capName = ocrYRange(img, fonts, colorSets, 0, capH - 1, 'cap');
+    // ── Try captureHold OCR — scan around mode indicator baseline (buffer y≈21) ─
+    var capName = ocrYRange(img, fonts, colorSets, 17, 26, 'cap');
     if (capName) {
       log('ocr: name (cap) — "' + capName + '"');
       setDetectedName(capName);
@@ -466,7 +492,7 @@ function tryNameFromInputLine() {
     if (typeof OCR.findReadLine === 'function') {
       try {
         for (var fci = 0; fci < colorSets.length; fci++) {
-          var flr = OCR.findReadLine(img, fonts[0], colorSets[fci], 0, 0, capH - 1);
+          var flr = OCR.findReadLine(img, fonts[0], colorSets[fci], 0, 17, 26);
           if (!flr) continue;
           var flText = (typeof flr === 'string') ? flr : (flr ? (flr.text || '') : '');
           if (flText.length < 2) continue;
@@ -875,7 +901,7 @@ async function refresh() {
 // ── Initialise ────────────────────────────────────────────────────
 
 function init() {
-  log('=== VGT v2.7 init ===');   // version banner — confirms which file loaded
+  log('=== VGT v2.8 init ===');   // version banner — confirms which file loaded
 
   // ── Load cached name immediately so the UI shows it before the first refresh
   try {
