@@ -294,36 +294,33 @@ function joinQueue() {
   btn.disabled    = true;
   btn.textContent = 'Submitting...';
 
-  var body = [
-    FORM_ENTRY + '=' + encodeURIComponent(name),
-    'fvv=1',
-    'pageHistory=0',
-    'fbzx=' + String(Math.floor(Math.random() * 9e15)),
-  ].join('&');
+  // Build a self-contained HTML page that auto-submits the form.
+  // Loading it via srcdoc means the form lives in its own document —
+  // same-origin to itself — so form.submit() is not a cross-origin call.
+  var fbzx = String(Math.floor(Math.random() * 9e15));
+  var safeValue = name.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  var srcdoc = [
+    '<!DOCTYPE html><html><body>',
+    '<form id="f" method="POST" action="' + FORM_POST_URL + '">',
+    '<input type="hidden" name="' + FORM_ENTRY + '" value="' + safeValue + '">',
+    '<input type="hidden" name="fvv" value="1">',
+    '<input type="hidden" name="pageHistory" value="0">',
+    '<input type="hidden" name="fbzx" value="' + fbzx + '">',
+    '</form>',
+    '<script>document.getElementById("f").submit();<\/script>',
+    '</body></html>',
+  ].join('');
 
-  // 1) sendBeacon
-  var beaconSent = false;
-  if (navigator.sendBeacon) {
-    beaconSent = navigator.sendBeacon(FORM_POST_URL, new Blob([body], { type: 'application/x-www-form-urlencoded' }));
-  }
+  var iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:absolute;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+  iframe.srcdoc = srcdoc;
+  document.body.appendChild(iframe);
 
-  // 2) XHR (behaves differently from fetch in some embedded webviews)
-  try {
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', FORM_POST_URL, true);
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.send(body);
-  } catch (e) { console.warn('[VGT] XHR error:', e); }
+  setTimeout(function() {
+    try { document.body.removeChild(iframe); } catch (e) {}
+  }, 10000);
 
-  // 3) fetch no-cors fallback
-  fetch(FORM_POST_URL, {
-    method:  'POST',
-    mode:    'no-cors',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    body,
-  }).catch(function(e) { console.warn('[VGT] fetch error:', e); });
-
-  btn.textContent = beaconSent ? '✓ Submitted!' : '✓ Sent (no beacon)';
+  btn.textContent = '✓ Submitted!';
   btn.classList.add('submitted');
   setTimeout(function() {
     btn.textContent = '+ Join Queue';
