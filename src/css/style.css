@@ -450,10 +450,14 @@ body.nis {
 }
 
 /* ── Scrollbar — override NIS yellow scrollbar everywhere ────────── */
-::-webkit-scrollbar       { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #44445a; }
+/* NIS uses body.nis *:not(.normalscroll)::-webkit-scrollbar (high specificity)
+   so !important + background-image:none is required to fully override it.    */
+::-webkit-scrollbar             { width: 4px !important; height: 4px !important; }
+::-webkit-scrollbar-button      { height: 0 !important; width: 0 !important; display: none !important; }
+::-webkit-scrollbar-track       { background: transparent !important; background-image: none !important; }
+::-webkit-scrollbar-thumb       { background: #2a2a3a !important; background-image: none !important; border-radius: 2px !important; }
+::-webkit-scrollbar-thumb:hover { background: #44445a !important; background-image: none !important; }
+::-webkit-scrollbar-corner      { background: transparent !important; }
 
 /* ── Debug Log ───────────────────────────────────────────────────── */
 .vgt-debug-log {
