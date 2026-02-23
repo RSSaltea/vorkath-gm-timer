@@ -12,10 +12,10 @@ const SHEET_ID    = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
 const SHEET_NAME  = 'List';
 const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
 
-const FORM_URL    = 'https://docs.google.com/forms/u/2/d/e/' +
-                    '1FAIpQLSd_D9dhB-4fOtp1tFmkzyD-ez9rScat76I15GfpoAlREvas7g' +
-                    '/formResponse';
-const FORM_ENTRY  = 'entry.1456397394';  // "Your RuneScape name?" field
+const FORM_VIEWURL = 'https://docs.google.com/forms/d/e/' +
+                     '1FAIpQLSd_D9dhB-4fOtp1tFmkzyD-ez9rScat76I15GfpoAlREvas7g' +
+                     '/viewform';
+const FORM_ENTRY   = 'entry.1456397394';  // "Your RuneScape name?" field
 
 // ── State ─────────────────────────────────────────────────────────
 let queueData     = [];   // current full queue (array of strings)
@@ -290,53 +290,26 @@ function joinQueue() {
   var name = getEffectiveName();
   if (!name) return;
 
+  // Build a pre-filled form URL so the user just has to click Submit
+  var url = FORM_VIEWURL + '?' + FORM_ENTRY + '=' + encodeURIComponent(name);
+
+  // Open in the system browser (Alt1) or a new tab (plain browser)
+  if (typeof alt1 !== 'undefined') {
+    alt1.openBrowser(url);
+  } else {
+    window.open(url, '_blank');
+  }
+
   var btn = document.getElementById('join-queue-btn');
+  btn.textContent = '↗ Opened in browser — submit & refresh';
   btn.disabled    = true;
-  btn.textContent = 'Submitting...';
-
-  // Use a hidden iframe + form POST — avoids CORS entirely and includes
-  // the extra fields Google Forms requires (fvv, pageHistory, fbzx).
-  var iframe = document.createElement('iframe');
-  iframe.name = '_vgt_submit';
-  iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
-  document.body.appendChild(iframe);
-
-  var form = document.createElement('form');
-  form.method = 'POST';
-  form.action = FORM_URL;
-  form.target = '_vgt_submit';
-  form.style.display = 'none';
-
-  [
-    [FORM_ENTRY, name],
-    ['fvv',         '1'],
-    ['pageHistory', '0'],
-    ['fbzx',        Math.floor(Math.random() * 9e15).toString()],
-  ].forEach(function(pair) {
-    var inp = document.createElement('input');
-    inp.type  = 'hidden';
-    inp.name  = pair[0];
-    inp.value = pair[1];
-    form.appendChild(inp);
-  });
-
-  document.body.appendChild(form);
-  form.submit();
-
-  // Clean up DOM after submission completes
-  setTimeout(function() {
-    try { document.body.removeChild(form);   } catch (e) {}
-    try { document.body.removeChild(iframe); } catch (e) {}
-  }, 5000);
-
-  btn.textContent = '✓ Submitted — refreshing in 5s';
   btn.classList.add('submitted');
   setTimeout(function() {
     btn.textContent = '+ Join Queue';
     btn.disabled    = false;
     btn.classList.remove('submitted');
     refresh();
-  }, 5000);
+  }, 8000);
 }
 
 // ── Initialise ────────────────────────────────────────────────────
