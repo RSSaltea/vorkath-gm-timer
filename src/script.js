@@ -275,27 +275,72 @@ function tryNameFromLastBuffer() {
 
     if (img.height < 20) { log('lrbuf: buffer too small (' + img.height + ')'); return false; }
 
-    var baseY = img.height - 18;
-
-    // ── readChatLine diagnostic — run once to see what the internal reader returns
-    if (!_rclLogged && typeof chatReader.readChatLine === 'function') {
+    // ── readChatLine with correct 7-param signature: (box, imgdata, imgx, imgy, font, colors, linenr)
+    // Signature discovered: liney = box.line0y - linenr * font.lineheight + font.dy
+    // linenr=0 = most recent chat line; linenr=-1 = mode indicator (one row below line 0).
+    // The mode indicator liney ≈ line0y + lineheight ≈ 213 + 14 = 227.
+    // lastReadBuffer is only 225px, so linenr=-1 is just out of bounds.
+    // Solution: capture 250px from rect.y so liney=227 IS in-bounds.
+    if (!_rclLogged && typeof chatReader.readChatLine === 'function' && chatReader.pos) {
       _rclLogged = true;
       try {
-        // How many params does it expect?
-        log('readChatLine.length=' + chatReader.readChatLine.length);
-        // Peek at source (may be minified but arg names still visible)
-        log('readChatLine src: ' + chatReader.readChatLine.toString().substring(0, 200));
-        // Try calling at input-line y positions (bottom 18 px of the buffer)
-        for (var ry = baseY; ry <= baseY + 14; ry += 2) {
-          try {
-            var rclR = chatReader.readChatLine(img, ry);
-            if (rclR !== null && rclR !== undefined) {
-              log('rcl y=' + ry + ': ' + JSON.stringify(rclR).substring(0, 120));
+        var _mb  = chatReader.pos.mainbox;
+        var _cfO = chatReader.font;
+        var _rc  = (chatReader.readargs && chatReader.readargs.colors) ? chatReader.readargs.colors : [];
+        log('font outer: lineheight=' + _cfO.lineheight + ' dy=' + _cfO.dy + ' badgey=' + _cfO.badgey);
+        // Quick sanity-check: read line 0 (most recent) on existing 225px buffer
+        try {
+          var _r0 = chatReader.readChatLine(_mb, img, 0, 0, _cfO, _rc, 0);
+          log('rcl[0] on lrbuf: "' + (_r0 ? (_r0.text || '').substring(0, 60) : 'null') + '"');
+        } catch(_e0) { log('rcl[0] err: ' + _e0.message); }
+        // Read linenr=-1 on a 250px tall capture — mode indicator expected at liney≈227
+        try {
+          var _rect = _mb.rect;
+          var _tallRef = alt1.captureHold(_rect.x, _rect.y, _rect.width, 250);
+          var _tallImg = _tallRef ? _tallRef.toData() : null;
+          if (_tallImg && _tallImg.data) {
+            log('tall250: ' + _tallImg.width + 'x' + _tallImg.height);
+            for (var _ln = -1; _ln >= -3; _ln--) {
+              try {
+                var _rln = chatReader.readChatLine(_mb, _tallImg, 0, 0, _cfO, _rc, _ln);
+                log('rcl[' + _ln + '] tall250: "' + (_rln ? (_rln.text || '').substring(0, 80) : 'null') + '"');
+              } catch(_eln) { log('rcl[' + _ln + '] tall err: ' + _eln.message); break; }
             }
-          } catch (rclE) { log('rcl y=' + ry + ' err: ' + rclE.message); break; }
-        }
+          }
+        } catch(_etall) { log('rcl tall: ' + _etall); }
       } catch (e3) { log('readChatLine setup err: ' + e3); }
     }
+
+    // ── Main detection: readChatLine(linenr=-1) on 250px capture ──────────────
+    // The mode indicator "Saltea◆: [Channel - Press Enter to Chat]" is one line
+    // below line 0, at buffer-y ≈ line0y + lineheight ≈ 227, just outside the
+    // 225px lastReadBuffer.  A 250px capture from rect.y brings it in-bounds.
+    if (typeof chatReader.readChatLine === 'function' && chatReader.pos) {
+      try {
+        var _mb2   = chatReader.pos.mainbox;
+        var _rect2 = _mb2.rect;
+        var _cfO2  = chatReader.font;
+        var _rc2   = (chatReader.readargs && chatReader.readargs.colors) ? chatReader.readargs.colors : [];
+        var _t2ref = alt1.captureHold(_rect2.x, _rect2.y, _rect2.width, 250);
+        var _t2img = _t2ref ? _t2ref.toData() : null;
+        if (_t2img && _t2img.data) {
+          var _rmi = chatReader.readChatLine(_mb2, _t2img, 0, 0, _cfO2, _rc2, -1);
+          if (_rmi && _rmi.text && _rmi.text.length > 1) {
+            log('mode indicator: "' + _rmi.text.substring(0, 80) + '"');
+            var _miName = extractNameFromOcrText(_rmi.text);
+            if (_miName) {
+              log('ocr: name (readChatLine) — "' + _miName + '"');
+              setDetectedName(_miName);
+              updateStatus(queueData.length > 0 ? queueData : null);
+              updateQueueList(queueData.length > 0 ? queueData : null);
+              return true;
+            }
+          }
+        }
+      } catch (_emi) { /* silent — fallthrough to lrbuf ocrYRange */ }
+    }
+
+    var baseY = img.height - 18;
     var colorSets = [
       [mc(255, 255, 255)],
       [mc(200, 200, 200)],
@@ -830,7 +875,7 @@ async function refresh() {
 // ── Initialise ────────────────────────────────────────────────────
 
 function init() {
-  log('=== VGT v2.5 init ===');   // version banner — confirms which file loaded
+  log('=== VGT v2.6 init ===');   // version banner — confirms which file loaded
 
   // ── Load cached name immediately so the UI shows it before the first refresh
   try {
