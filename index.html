@@ -8,8 +8,6 @@
   <title>Vorkath Grandmaster Timer</title>
 
   <script src="https://www.unpkg.com/alt1/dist/base/index.js"></script>
-  <script src="https://www.unpkg.com/alt1/dist/ocr/index.js"></script>
-  <script src="https://www.unpkg.com/alt1/dist/chatbox/index.js"></script>
 
   <link rel="stylesheet" href="https://runeapps.org/nis/nis.css" />
   <link rel="stylesheet" href="./src/css/nis.css?v=1.0" />
@@ -29,20 +27,18 @@
     <div class="vgt-tabs">
       <button class="vgt-tab active" data-tab="status">Status</button>
       <button class="vgt-tab" data-tab="queue">Full Queue</button>
-      <button class="vgt-tab" data-tab="debug">Debug</button>
     </div>
 
     <!-- ── STATUS TAB ── -->
     <div class="vgt-page active" id="tab-status">
 
       <div class="vgt-name-card">
-        <div class="vgt-label">Your Name</div>
-        <div class="vgt-player-name" id="player-name">Detecting...</div>
+        <div class="vgt-label">Your RS Name</div>
         <input
           class="vgt-name-input"
           id="name-override"
           type="text"
-          placeholder="Or type your name here..."
+          placeholder="Enter your RS name..."
           autocomplete="off"
           spellcheck="false"
         />
@@ -80,22 +76,8 @@
 
     </div>
 
-    <!-- ── DEBUG TAB ── -->
-    <div class="vgt-page" id="tab-debug">
-
-      <div class="vgt-queue-header">
-        <div class="vgt-label">Debug Log</div>
-        <button class="vgt-refresh-btn" id="debug-clear-btn">✕ Clear</button>
-      </div>
-
-      <div class="vgt-debug-log normalscroll" id="debug-log">
-        <div class="vgt-debug-entry muted">Waiting for events...</div>
-      </div>
-
-    </div>
-
   </div>
 
-  <script src="./src/script.js?v=2.8"></script>
+  <script src="./src/script.js?v=3.0"></script>
 </body>
 </html>
