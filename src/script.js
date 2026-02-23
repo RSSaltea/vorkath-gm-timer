@@ -28,6 +28,8 @@ let nameDetectTimer   = null;  // input-line OCR interval
 let _fontStructLogged = false;
 let _ocrKeysLogged    = false;
 let _lastFontState    = false;
+let _mcLogged         = false;   // separate flag: log mc() packed format once
+let _rawOcrLogged     = false;   // separate flag: log raw OCR result once
 
 // ── Debug log ─────────────────────────────────────────────────────
 
@@ -238,12 +240,31 @@ function tryNameFromInputLine() {
     if (!mc) { log('ocr: no mixColor'); return false; }
 
     // Log the packed-color format once so we can verify it matches OCR expectations
-    var _mcTest = mc(255, 255, 255);
-    if (!_ocrKeysLogged) log('mc(255,255,255) = 0x' + (_mcTest >>> 0).toString(16).padStart(8, '0'));
+    if (!_mcLogged) {
+      _mcLogged = true;
+      var _mcTest = mc(255, 255, 255);
+      log('mc(255,255,255) = 0x' + (_mcTest >>> 0).toString(16).padStart(8, '0'));
+      // Also scan pixel colors across the name area (left side of input line)
+      // to find out what color "Saltea" is actually rendered in
+      var pixScan = 'px y=5:';
+      for (var sx = 0; sx <= 60; sx += 5) {
+        var si = (5 * img.width + sx) * 4;
+        pixScan += ' x' + sx + '=(' + img.data[si] + ',' + img.data[si+1] + ',' + img.data[si+2] + ')';
+      }
+      log(pixScan);
+      var pixScan2 = 'px y=0:';
+      for (var sx2 = 0; sx2 <= 60; sx2 += 5) {
+        var si2 = (0 * img.width + sx2) * 4;
+        pixScan2 += ' x' + sx2 + '=(' + img.data[si2] + ',' + img.data[si2+1] + ',' + img.data[si2+2] + ')';
+      }
+      log(pixScan2);
+    }
 
     // Colours to try — white for "◆: [Public Chat..." plus other RS chat colours
     var colorSets = [
       [mc(255, 255, 255)],           // white  (most likely for input line)
+      [mc(200, 200, 200)],           // light grey (anti-aliased white)
+      [mc(160, 160, 160)],           // medium grey
       [mc(255, 255, 0)],             // yellow
       [mc(255, 200, 0)],             // gold
       [mc(127, 169, 255)],           // public chat blue
@@ -254,13 +275,19 @@ function tryNameFromInputLine() {
 
     // ── OCR every y-baseline across the full captured strip ───────────────────
     for (var fi = 0; fi < fonts.length; fi++) {
-      for (var yo = 1; yo < capH - 1; yo++) {
+      for (var yo = 0; yo < capH; yo++) {
         for (var ci = 0; ci < colorSets.length; ci++) {
           try {
             var res  = OCR.readLine(img, fonts[fi], colorSets[ci], 0, yo, true, false);
             if (!res) continue;
             var text = (typeof res === 'string') ? res : (res.text || '');
             if (text.length < 2) continue;
+
+            // Log raw result once (before filtering) to diagnose font/color issues
+            if (!_rawOcrLogged && yo <= 12) {
+              _rawOcrLogged = true;
+              log('raw f=' + fi + ' y=' + yo + ' c=' + ci + ': "' + text.substring(0, 40) + '"');
+            }
 
             // Skip results where every character is the same (font-mismatch indicator)
             var uc = {}; for (var kk = 0; kk < Math.min(text.length, 8); kk++) uc[text[kk]] = 1;
@@ -304,7 +331,7 @@ function tryNameFromInputLine() {
     if (typeof OCR.findReadLine === 'function') {
       try {
         for (var fci = 0; fci < colorSets.length; fci++) {
-          var flr = OCR.findReadLine(img, fonts, colorSets[fci], 0, 0, capH - 1);
+          var flr = OCR.findReadLine(img, fonts[0], colorSets[fci], 0, 0, capH - 1);
           if (!flr) continue;
           var flText = (typeof flr === 'string') ? flr : (flr.text || '');
           if (flText.length < 2) continue;
