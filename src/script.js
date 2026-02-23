@@ -12,9 +12,9 @@ const SHEET_ID    = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
 const SHEET_NAME  = 'List';
 const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
 
-const FORM_VIEWURL = 'https://docs.google.com/forms/d/e/' +
-                     '1FAIpQLSd_D9dhB-4fOtp1tFmkzyD-ez9rScat76I15GfpoAlREvas7g' +
-                     '/viewform';
+const FORM_VIEWURL = 'https://docs.google.com/forms/d/' +
+                     '1FTSwwobx_g0n4K4dQM8MO_45jRfeQ2bzSnPddIH4Jy8' +
+                     '/viewform?usp=pp_url';
 const FORM_ENTRY   = 'entry.1456397394';  // "Your RuneScape name?" field
 
 // ── State ─────────────────────────────────────────────────────────
@@ -291,7 +291,7 @@ function joinQueue() {
   if (!name) return;
 
   // Build a pre-filled form URL so the user just has to click Submit
-  var url = FORM_VIEWURL + '?' + FORM_ENTRY + '=' + encodeURIComponent(name);
+  var url = FORM_VIEWURL + '&' + FORM_ENTRY + '=' + encodeURIComponent(name);
 
   // Open in the system browser (Alt1) or a new tab (plain browser)
   if (typeof alt1 !== 'undefined') {
