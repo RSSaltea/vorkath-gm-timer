@@ -24,6 +24,11 @@ let refreshTimer      = null;
 let chatReader        = null;
 let nameDetectTimer   = null;  // input-line OCR interval
 
+// ── OCR diagnostics (logged once) ─────────────────────────────────
+let _fontStructLogged = false;
+let _ocrKeysLogged    = false;
+let _lastFontState    = false;
+
 // ── Debug log ─────────────────────────────────────────────────────
 
 function log(msg) {
@@ -100,20 +105,61 @@ function detectName() {
 function getChatFonts() {
   var fonts = [];
 
+  // Log OCR module keys once — helps diagnose available helpers
+  if (!_ocrKeysLogged && typeof OCR !== 'undefined') {
+    _ocrKeysLogged = true;
+    try { log('OCR keys: ' + Object.getOwnPropertyNames(OCR).join(',')); } catch (e) {}
+  }
+
   if (chatReader && chatReader.font) {
     var cf = chatReader.font;
+
+    // Log full font structure once so we can diagnose mismatches
+    if (!_fontStructLogged) {
+      _fontStructLogged = true;
+      try {
+        log('chatReader.font keys: ' + Object.keys(cf).join(','));
+        if (cf.def) {
+          log('font.def keys: ' + Object.keys(cf.def).join(',') +
+              ' basey=' + cf.def.basey + ' h=' + cf.def.height +
+              ' chars#=' + (cf.def.chars ? Object.keys(cf.def.chars).length : 'none'));
+        } else {
+          log('font direct: basey=' + cf.basey + ' h=' + cf.height +
+              ' chars#=' + (cf.chars ? Object.keys(cf.chars).length : 'none'));
+        }
+        log('chatReader inst keys: ' + Object.keys(chatReader).join(','));
+      } catch (e) {}
+    }
+
     if (cf.def && cf.def.chars) {
       // Outer wrapper — OCR needs the inner def
       fonts.push(cf.def);
-      log('getChatFonts: using chatReader.font.def (basey=' + cf.def.basey + ' h=' + cf.def.height + ')');
     } else if (cf.chars) {
       // Already the inner FontDefinition
       fonts.push(cf);
-      log('getChatFonts: using chatReader.font directly (basey=' + cf.basey + ' h=' + cf.height + ')');
     } else {
-      // Unknown structure — log it and try anyway
-      log('getChatFonts: unknown font struct, keys=' + Object.keys(cf).join(','));
-      fonts.push(cf);
+      // Unknown structure — search common sub-property names
+      log('getChatFonts: unknown struct, keys=' + Object.keys(cf).join(','));
+      var tryKeys = ['def', 'font', 'fontDef', 'fd', 'data'];
+      for (var tk = 0; tk < tryKeys.length; tk++) {
+        var sub = cf[tryKeys[tk]];
+        if (sub && sub.chars) { fonts.push(sub); log('getChatFonts: found via cf.' + tryKeys[tk]); break; }
+      }
+      if (fonts.length === 0) fonts.push(cf); // last resort
+    }
+  }
+
+  // Check if the chatReader instance itself exposes a fonts array
+  if (chatReader) {
+    var crArr = chatReader.fonts || chatReader.chatfonts || chatReader._fonts;
+    if (Array.isArray(crArr)) {
+      log('getChatFonts: chatReader has ' + crArr.length + ' fonts in array');
+      for (var ci = 0; ci < crArr.length; ci++) {
+        var fi = crArr[ci];
+        if (!fi) continue;
+        if (fi.def && fi.def.chars) fonts.push(fi.def);
+        else if (fi.chars)          fonts.push(fi);
+      }
     }
   }
 
@@ -129,19 +175,11 @@ function getChatFonts() {
         else if (f.chars)         fonts.push(f);
       }
       log('getChatFonts: +' + arr.length + ' bundled fonts');
-    } else {
-      // Log keys of Chatbox.default to help track down the fonts array
-      if (Chatbox.default && typeof Chatbox.default === 'function') {
-        try {
-          log('getChatFonts: Chatbox.default own keys=' +
-              Object.getOwnPropertyNames(Chatbox.default).join(','));
-        } catch(e2) {}
-      }
     }
   }
 
   if (fonts.length === 0) {
-    log('getChatFonts: no fonts found — will retry when chatReader.font is set');
+    log('getChatFonts: no fonts yet');
   }
   return fonts;
 }
@@ -199,6 +237,10 @@ function tryNameFromInputLine() {
     var mc = A1lib.mixColor || (typeof mixColor === 'function' ? mixColor : null);
     if (!mc) { log('ocr: no mixColor'); return false; }
 
+    // Log the packed-color format once so we can verify it matches OCR expectations
+    var _mcTest = mc(255, 255, 255);
+    if (!_ocrKeysLogged) log('mc(255,255,255) = 0x' + (_mcTest >>> 0).toString(16).padStart(8, '0'));
+
     // Colours to try — white for "◆: [Public Chat..." plus other RS chat colours
     var colorSets = [
       [mc(255, 255, 255)],           // white  (most likely for input line)
@@ -219,6 +261,10 @@ function tryNameFromInputLine() {
             if (!res) continue;
             var text = (typeof res === 'string') ? res : (res.text || '');
             if (text.length < 2) continue;
+
+            // Skip results where every character is the same (font-mismatch indicator)
+            var uc = {}; for (var kk = 0; kk < Math.min(text.length, 8); kk++) uc[text[kk]] = 1;
+            if (Object.keys(uc).length === 1 && text.length > 4) continue;
 
             log('f=' + fi + ' y=' + yo + ' c=' + ci + ': "' + text + '"');
 
@@ -254,6 +300,40 @@ function tryNameFromInputLine() {
         }
       }
     }
+    // ── Try OCR.findReadLine if available — searches y-range automatically ──
+    if (typeof OCR.findReadLine === 'function') {
+      try {
+        for (var fci = 0; fci < colorSets.length; fci++) {
+          var flr = OCR.findReadLine(img, fonts, colorSets[fci], 0, 0, capH - 1);
+          if (!flr) continue;
+          var flText = (typeof flr === 'string') ? flr : (flr.text || '');
+          if (flText.length < 2) continue;
+          log('findReadLine c=' + fci + ': "' + flText + '"');
+          var flAnchor = flText.indexOf(': [');
+          if (flAnchor < 0) flAnchor = flText.indexOf(' [');
+          if (flAnchor > 0) {
+            var flBefore = flText.substring(0, flAnchor).trim();
+            var flM = flBefore.match(/([A-Za-z0-9][A-Za-z0-9 \-]*)$/);
+            if (flM && flM[1].trim().length >= 2) {
+              log('ocr: name (findReadLine) — "' + flM[1].trim() + '"');
+              setDetectedName(flM[1].trim());
+              updateStatus(queueData.length > 0 ? queueData : null);
+              updateQueueList(queueData.length > 0 ? queueData : null);
+              return true;
+            }
+          }
+          var flA = flText.match(/^([A-Za-z0-9][A-Za-z0-9 \-]{1,11})(?:[^A-Za-z0-9 \-]|$)/);
+          if (flA && flA[1].trim().length >= 2) {
+            log('ocr: name (findReadLine) — "' + flA[1].trim() + '"');
+            setDetectedName(flA[1].trim());
+            updateStatus(queueData.length > 0 ? queueData : null);
+            updateQueueList(queueData.length > 0 ? queueData : null);
+            return true;
+          }
+        }
+      } catch (efl) { log('findReadLine: ' + efl); }
+    }
+
     log('ocr: no match (fonts=' + fonts.length + ')');
   } catch (e) {
     log('tryNameFromInputLine: ' + e);
@@ -266,36 +346,26 @@ function startChatReading() {
   log('startChatReading: launching loops');
   var _lastReadLog = 0;
 
-  // ── Chat read loop — chat-history fallback for name + keeps chatReader.font updated
+  // ── Chat read loop — only used to keep chatReader.font updated.
+  // We do NOT read names from chat history; other players' messages would
+  // appear identical to yours and give the wrong name.
   setInterval(function () {
     try {
       var lines = chatReader.read();
-      // Log read() status only when lines arrive or every 10 s (not every 500 ms)
       var now = Date.now();
+      var fontNow = !!chatReader.font;
+
       if ((lines && lines.length > 0) || now - _lastReadLog > 10000) {
-        log('read(): ' + (lines ? lines.length : 'null') + ' lines, font=' + !!chatReader.font);
+        log('read(): ' + (lines ? lines.length : 'null') + ' lines, font=' + fontNow);
         _lastReadLog = now;
       }
 
-      if (!detectedName && lines && lines.length > 0) {
-        var reName = /^\[\d{1,2}:\d{2}:\d{2}\] (?!\[)(?!\*)([A-Za-z0-9][A-Za-z0-9 \-]{0,11}):\s/;
-        var counts = {};
-        for (var i = 0; i < lines.length; i++) {
-          if (!lines[i] || !lines[i].text) continue;
-          var m = lines[i].text.match(reName);
-          if (m) counts[m[1]] = (counts[m[1]] || 0) + 1;
-        }
-        var best = null, bestCount = 0;
-        for (var n in counts) {
-          if (counts[n] > bestCount) { bestCount = counts[n]; best = n; }
-        }
-        if (best) {
-          log('chat fallback: "' + best + '" (' + bestCount + 'x)');
-          setDetectedName(best);
-          updateStatus(queueData.length > 0 ? queueData : null);
-          updateQueueList(queueData.length > 0 ? queueData : null);
-        }
+      // Font just became available — trigger input-line OCR immediately
+      if (fontNow && !_lastFontState && !detectedName) {
+        log('font just set — triggering OCR now');
+        setTimeout(tryNameFromInputLine, 100);
       }
+      _lastFontState = fontNow;
     } catch (e) { log('read loop: ' + e); }
   }, 500);
 
@@ -367,6 +437,7 @@ function setDetectedName(name) {
   name = name.replace(/_/g, ' ');
   if (name === detectedName) return;
   detectedName = name;
+  try { localStorage.setItem('vgt_playerName', name); } catch (e) {}
   updateNameDisplay(detectedName, true);
 }
 
@@ -607,6 +678,16 @@ async function refresh() {
 // ── Initialise ────────────────────────────────────────────────────
 
 function init() {
+  // ── Load cached name immediately so the UI shows it before the first refresh
+  try {
+    var saved = localStorage.getItem('vgt_playerName');
+    if (saved && saved.trim()) {
+      detectedName = saved.trim();
+      updateNameDisplay(detectedName, true);
+      log('name from cache: "' + detectedName + '"');
+    }
+  } catch (e) {}
+
   // ── Tab switching
   document.querySelectorAll('.vgt-tab').forEach(function(tab) {
     tab.addEventListener('click', function() {
