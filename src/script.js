@@ -90,6 +90,8 @@ function getEffectiveName() {
 function detectName() {
   if (typeof alt1 === 'undefined') return;
 
+  log('detectName: rsPlayerName="' + alt1.rsPlayerName + '" rsProfileName="' + alt1.rsProfileName + '"');
+
   // Primary: direct property on the alt1 object
   if (alt1.rsPlayerName && alt1.rsPlayerName !== '') {
     setDetectedName(alt1.rsPlayerName);
@@ -101,8 +103,6 @@ function detectName() {
     setDetectedName(alt1.rsProfileName);
     return;
   }
-
-  // Tertiary: no further fallback — chatbox is initialised separately
 }
 
 function initChatbox() {
@@ -143,7 +143,22 @@ function initChatbox() {
             log('chatbox found at ' + JSON.stringify(chatReader.pos));
             clearInterval(finder);
             setInterval(function () {
-              try { chatReader.read(); } catch (e) { log('read error: ' + e); }
+              try {
+                var lines = chatReader.read();
+                if (lines && lines.length > 0) {
+                  log('read() got ' + lines.length + ' line(s): ' + JSON.stringify(lines[0]));
+                  // Try to extract player name from a "who" field
+                  if (!detectedName) {
+                    for (var i = 0; i < lines.length; i++) {
+                      if (lines[i].who) {
+                        log('name from chat: ' + lines[i].who);
+                        setDetectedName(lines[i].who);
+                        break;
+                      }
+                    }
+                  }
+                }
+              } catch (e) { log('read error: ' + e); }
             }, 250);
           }
         } catch (e) { log('finder error: ' + e); }
