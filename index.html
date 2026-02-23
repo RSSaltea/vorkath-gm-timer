@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Vorkath GM Timer</title>
+
+  <script src="https://www.unpkg.com/alt1/dist/base/index.js"></script>
+  <script src="https://www.unpkg.com/alt1/dist/ocr/index.js"></script>
+  <script src="https://www.unpkg.com/alt1/dist/chatbox/index.js"></script>
+
+  <link rel="stylesheet" href="https://runeapps.org/nis/nis.css" />
+  <link rel="stylesheet" href="./src/css/nis.css?v=1.0" />
+  <link rel="stylesheet" href="./src/css/style.css?v=1.0" />
+</head>
+<body class="nis">
+
+  <div class="vgt-app">
+
+    <!-- Header -->
+    <header class="vgt-header">
+      <div class="vgt-title">Vorkath GM Timer</div>
+      <div class="vgt-status-dot" id="vgt-dot" title="Connection status"></div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="vgt-tabs">
+      <button class="vgt-tab active" data-tab="status">Status</button>
+      <button class="vgt-tab" data-tab="queue">Full Queue</button>
+    </div>
+
+    <!-- ── STATUS TAB ── -->
+    <div class="vgt-page active" id="tab-status">
+
+      <div class="vgt-name-card">
+        <div class="vgt-label">Your Name</div>
+        <div class="vgt-player-name" id="player-name">Detecting...</div>
+        <input
+          class="vgt-name-input"
+          id="name-override"
+          type="text"
+          placeholder="Or type your name here..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <div class="vgt-alert-card neutral" id="alert-card">
+        <div class="vgt-alert-icon" id="alert-icon">⏳</div>
+        <div class="vgt-alert-title" id="alert-title">Checking queue...</div>
+        <div class="vgt-alert-sub" id="alert-sub"></div>
+      </div>
+
+      <div class="vgt-position-card">
+        <div class="vgt-label">Your Position</div>
+        <div class="vgt-position" id="queue-position">—</div>
+      </div>
+
+      <div class="vgt-footer">
+        <span id="last-updated">Not yet updated</span>
+        <button class="vgt-refresh-btn" id="refresh-btn">↻ Refresh</button>
+      </div>
+
+    </div>
+
+    <!-- ── QUEUE TAB ── -->
+    <div class="vgt-page" id="tab-queue">
+
+      <div class="vgt-queue-header">
+        <div class="vgt-label">Current Queue</div>
+        <button class="vgt-refresh-btn" id="refresh-btn-queue">↻ Refresh</button>
+      </div>
+
+      <div class="vgt-queue-list" id="queue-list">
+        <div class="vgt-queue-state">Loading queue...</div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="./src/script.js?v=1.0"></script>
+</body>
+</html>

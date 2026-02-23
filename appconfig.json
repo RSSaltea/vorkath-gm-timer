@@ -1,0 +1,17 @@
+{
+  "appName": "Vorkath GM Timer",
+  "description": "Vorkath Grandmaster Carry Queue Timer - see when you're up.",
+  "appUrl": "./index.html",
+  "version": "1.0.0",
+  "configUrl": "./appconfig.json",
+  "iconUrl": "./src/icon1.png",
+  "defaultWidth": 300,
+  "defaultHeight": 460,
+  "minWidth": 240,
+  "minHeight": 340,
+  "maxWidth": 600,
+  "maxHeight": 800,
+  "requestHandlers": [],
+  "activators": [],
+  "permissions": "pixel,gamestate"
+}

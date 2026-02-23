@@ -1,0 +1,454 @@
+/* ================================================================
+   Vorkath GM Timer — style.css
+   ================================================================ */
+
+@font-face {
+  font-family: 'rs-pro-3';
+  src: url('https://runeapps.org/fonts/rs-pro-3.woff') format('woff');
+}
+
+/* ── Variables ─────────────────────────────────────────────────── */
+:root {
+  --bg:          #0f0f14;
+  --bg-card:     #16161f;
+  --bg-card-alt: #1a1a27;
+  --border:      #26263a;
+  --border-soft: #1e1e2e;
+
+  --accent:      #4a9eff;
+  --accent-dim:  rgba(74, 158, 255, 0.15);
+
+  --turn:        #4caf50;
+  --turn-dim:    rgba(76, 175, 80, 0.12);
+  --soon:        #ff9800;
+  --soon-dim:    rgba(255, 152, 0, 0.10);
+  --neutral:     #555568;
+  --error:       #f44336;
+
+  --text:        #dde1e7;
+  --text-muted:  #6e7380;
+  --text-dim:    #444455;
+
+  --radius:      8px;
+  --radius-sm:   5px;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Base ───────────────────────────────────────────────────────── */
+body.nis {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* ── App Container ──────────────────────────────────────────────── */
+.vgt-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 10px 10px 6px;
+  gap: 8px;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.vgt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.vgt-title {
+  font-family: 'rs-pro-3', serif;
+  font-size: 17px;
+  color: #bcd4f8;
+  letter-spacing: 0.4px;
+}
+
+/* ── Status Dot ─────────────────────────────────────────────────── */
+.vgt-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--neutral);
+  flex-shrink: 0;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.vgt-status-dot.connected {
+  background: var(--turn);
+  box-shadow: 0 0 7px var(--turn);
+}
+
+.vgt-status-dot.error {
+  background: var(--error);
+  box-shadow: 0 0 7px var(--error);
+}
+
+.vgt-status-dot.loading {
+  background: var(--soon);
+  animation: dot-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────── */
+.vgt-tabs {
+  display: flex;
+  gap: 3px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.vgt-tab {
+  flex: 1;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.vgt-tab:hover {
+  background: var(--bg-card-alt);
+  color: var(--text);
+}
+
+.vgt-tab.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ── Pages ──────────────────────────────────────────────────────── */
+.vgt-page {
+  display: none;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.vgt-page.active {
+  display: flex;
+}
+
+/* ── Shared Label ───────────────────────────────────────────────── */
+.vgt-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+/* ── Name Card ──────────────────────────────────────────────────── */
+.vgt-name-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+
+.vgt-player-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 7px;
+  min-height: 20px;
+}
+
+.vgt-player-name.detected {
+  color: var(--text);
+}
+
+.vgt-name-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.vgt-name-input:focus {
+  border-color: var(--accent);
+}
+
+.vgt-name-input::placeholder {
+  color: var(--text-dim);
+}
+
+/* ── Alert Card ─────────────────────────────────────────────────── */
+.vgt-alert-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
+}
+
+.vgt-alert-icon {
+  font-size: 26px;
+  margin-bottom: 5px;
+  line-height: 1;
+}
+
+.vgt-alert-title {
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text);
+}
+
+.vgt-alert-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* — turn state: it's your go — */
+.vgt-alert-card.turn {
+  border-color: var(--turn);
+  background: var(--turn-dim);
+  box-shadow: 0 0 18px rgba(76, 175, 80, 0.18);
+  animation: card-flash 2s ease-in-out infinite;
+}
+
+.vgt-alert-card.turn .vgt-alert-title {
+  color: var(--turn);
+}
+
+@keyframes card-flash {
+  0%, 100% { box-shadow: 0 0 18px rgba(76, 175, 80, 0.18); }
+  50%       { box-shadow: 0 0 28px rgba(76, 175, 80, 0.40); }
+}
+
+/* — soon state: top 3 — */
+.vgt-alert-card.soon {
+  border-color: var(--soon);
+  background: var(--soon-dim);
+  box-shadow: 0 0 12px rgba(255, 152, 0, 0.12);
+}
+
+.vgt-alert-card.soon .vgt-alert-title {
+  color: var(--soon);
+}
+
+/* — waiting state: in queue but not top 3 — */
+.vgt-alert-card.waiting {
+  border-color: var(--border);
+  background: var(--bg-card);
+}
+
+.vgt-alert-card.waiting .vgt-alert-title {
+  color: var(--accent);
+}
+
+/* — neutral / not in queue — */
+.vgt-alert-card.neutral .vgt-alert-title {
+  color: var(--text-muted);
+}
+
+/* — error — */
+.vgt-alert-card.error {
+  border-color: var(--error);
+}
+
+.vgt-alert-card.error .vgt-alert-title {
+  color: var(--error);
+}
+
+/* — warning (name not detected) — */
+.vgt-alert-card.warning .vgt-alert-title {
+  color: var(--soon);
+}
+
+/* ── Position Card ──────────────────────────────────────────────── */
+.vgt-position-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.vgt-position {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────── */
+.vgt-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 1px;
+  flex-shrink: 0;
+}
+
+#last-updated {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* ── Refresh Button ─────────────────────────────────────────────── */
+.vgt-refresh-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  padding: 3px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.vgt-refresh-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.vgt-refresh-btn:active {
+  opacity: 0.7;
+}
+
+/* ── Queue Tab ──────────────────────────────────────────────────── */
+.vgt-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.vgt-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding-right: 2px;
+}
+
+/* ── Queue Items ─────────────────────────────────────────────────── */
+.vgt-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  transition: background 0.15s;
+}
+
+.vgt-queue-item.first {
+  border-color: var(--turn);
+  background: var(--turn-dim);
+}
+
+.vgt-queue-item.top3 {
+  border-color: #3d2800;
+  background: #160e00;
+}
+
+.vgt-queue-item.is-you {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.vgt-queue-rank {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  min-width: 26px;
+  flex-shrink: 0;
+}
+
+.vgt-queue-item.first .vgt-queue-rank  { color: var(--turn); }
+.vgt-queue-item.top3  .vgt-queue-rank  { color: var(--soon); }
+
+.vgt-queue-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vgt-queue-name .you-tag {
+  color: var(--accent);
+  font-size: 10px;
+  margin-left: 4px;
+  font-weight: 600;
+}
+
+/* ── Badges ─────────────────────────────────────────────────────── */
+.vgt-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+
+.vgt-badge.turn { background: var(--turn);  color: #fff; }
+.vgt-badge.soon { background: var(--soon);  color: #fff; }
+
+/* ── Queue empty / loading / error states ────────────────────────── */
+.vgt-queue-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px 0;
+  font-size: 13px;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #44445a; }
