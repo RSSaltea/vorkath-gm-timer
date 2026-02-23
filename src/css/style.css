@@ -488,3 +488,7 @@ body.nis {
 .vgt-join-btn.submitted {
   background: var(--turn);
 }
+
+.vgt-join-btn.closed {
+  background: var(--neutral);
+}

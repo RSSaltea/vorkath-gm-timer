@@ -17,10 +17,11 @@ const GAS_URL = 'https://script.google.com/macros/s/' +
                 '/exec';
 
 // ── State ─────────────────────────────────────────────────────────
-let queueData     = [];   // current full queue (array of strings)
-let wasFirst      = false;
-let wasInTopThree = false;
-let refreshTimer  = null;
+let queueData       = [];   // current full queue (array of strings)
+let wasFirst        = false;
+let wasInTopThree   = false;
+let refreshTimer    = null;
+let submissionsOpen = true; // controlled by Responses!G947
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -123,6 +124,15 @@ function updateStatus(queue) {
     alertSub.textContent   = 'You are not currently listed';
     posEl.textContent      = '—';
     joinBtn.style.display  = 'block';
+    if (submissionsOpen) {
+      joinBtn.disabled     = false;
+      joinBtn.textContent  = '+ Join Queue';
+      joinBtn.classList.remove('closed');
+    } else {
+      joinBtn.disabled     = true;
+      joinBtn.textContent  = 'Submissions closed';
+      joinBtn.classList.add('closed');
+    }
     wasInTopThree = false;
     wasFirst      = false;
     return;
@@ -268,10 +278,25 @@ function updateTimestamp() {
 
 // ── Main refresh ──────────────────────────────────────────────────
 
+async function fetchSubmissionsOpen() {
+  try {
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+              '/gviz/tq?tqx=out:csv&sheet=Responses&range=G947';
+    var resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var text = await resp.text();
+    submissionsOpen = text.replace(/"/g, '').trim().toUpperCase() === 'TRUE';
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch submissions status:', err);
+    submissionsOpen = true; // default open on error
+  }
+}
+
 async function refresh() {
   setDot('loading');
 
-  var queue = await fetchQueue();
+  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen()]);
+  var queue   = results[0];
 
   if (queue) {
     setDot('connected');
