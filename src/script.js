@@ -275,34 +275,38 @@ function tryNameFromLastBuffer() {
 
     if (img.height < 20) { log('lrbuf: buffer too small (' + img.height + ')'); return false; }
 
-    // ── readChatLine with correct 7-param signature: (box, imgdata, imgx, imgy, font, colors, linenr)
-    // Signature discovered: liney = box.line0y - linenr * font.lineheight + font.dy
-    // linenr=0 = most recent chat line; linenr=-1 = mode indicator (one row below line 0).
-    // The mode indicator liney ≈ line0y + lineheight ≈ 213 + 14 = 227.
-    // lastReadBuffer is only 225px, so linenr=-1 is just out of bounds.
-    // Solution: capture 250px from rect.y so liney=227 IS in-bounds.
+    // ── Helper: captureHold via A1lib (alt1.captureHold is not exposed here) ──
+    function _cap(x, y, w, h) {
+      if (typeof alt1 !== 'undefined' && typeof alt1.captureHold === 'function')
+        return alt1.captureHold(x, y, w, h);
+      return A1lib.captureHold(x, y, w, h);
+    }
+
+    // ── readChatLine with correct 7-param signature ───────────────────────────
+    // Formula: liney = box.line0y - linenr * font.lineheight + font.dy
+    //   lineheight=16, dy=-3 → linenr=-1 → liney = 213 + 16 - 3 = 226
+    // 226 is 1px outside the 225px lastReadBuffer but inside a 250px capture.
+    // IMPORTANT: readChatLine expects the raw ImgRefBind, NOT ImageData from .toData().
     if (!_rclLogged && typeof chatReader.readChatLine === 'function' && chatReader.pos) {
       _rclLogged = true;
       try {
         var _mb  = chatReader.pos.mainbox;
         var _cfO = chatReader.font;
         var _rc  = (chatReader.readargs && chatReader.readargs.colors) ? chatReader.readargs.colors : [];
-        log('font outer: lineheight=' + _cfO.lineheight + ' dy=' + _cfO.dy + ' badgey=' + _cfO.badgey);
-        // Quick sanity-check: read line 0 (most recent) on existing 225px buffer
+        // Sanity-check: pass raw ImgRefBind (not .toData()) — same as read() does internally
         try {
-          var _r0 = chatReader.readChatLine(_mb, img, 0, 0, _cfO, _rc, 0);
-          log('rcl[0] on lrbuf: "' + (_r0 ? (_r0.text || '').substring(0, 60) : 'null') + '"');
-        } catch(_e0) { log('rcl[0] err: ' + _e0.message); }
-        // Read linenr=-1 on a 250px tall capture — mode indicator expected at liney≈227
+          var _r0 = chatReader.readChatLine(_mb, raw, 0, 0, _cfO, _rc, 0);
+          log('rcl[0] raw: "' + (_r0 ? (_r0.text || '(no text)').substring(0, 60) : 'null') + '"');
+        } catch(_e0) { log('rcl[0] raw err: ' + _e0.message); }
+        // 250px tall capture to include mode indicator at liney=226
         try {
           var _rect = _mb.rect;
-          var _tallRef = alt1.captureHold(_rect.x, _rect.y, _rect.width, 250);
-          var _tallImg = _tallRef ? _tallRef.toData() : null;
-          if (_tallImg && _tallImg.data) {
-            log('tall250: ' + _tallImg.width + 'x' + _tallImg.height);
+          var _t250 = _cap(_rect.x, _rect.y, _rect.width, 250);  // raw ImgRefBind
+          if (_t250) {
+            log('tall250 ref type: ' + typeof _t250);
             for (var _ln = -1; _ln >= -3; _ln--) {
               try {
-                var _rln = chatReader.readChatLine(_mb, _tallImg, 0, 0, _cfO, _rc, _ln);
+                var _rln = chatReader.readChatLine(_mb, _t250, 0, 0, _cfO, _rc, _ln);
                 log('rcl[' + _ln + '] tall250: "' + (_rln ? (_rln.text || '').substring(0, 80) : 'null') + '"');
               } catch(_eln) { log('rcl[' + _ln + '] tall err: ' + _eln.message); break; }
             }
@@ -311,20 +315,16 @@ function tryNameFromLastBuffer() {
       } catch (e3) { log('readChatLine setup err: ' + e3); }
     }
 
-    // ── Main detection: readChatLine(linenr=-1) on 250px capture ──────────────
-    // The mode indicator "Saltea◆: [Channel - Press Enter to Chat]" is one line
-    // below line 0, at buffer-y ≈ line0y + lineheight ≈ 227, just outside the
-    // 225px lastReadBuffer.  A 250px capture from rect.y brings it in-bounds.
+    // ── Main detection: readChatLine(linenr=-1) on 250px capture ─────────────
     if (typeof chatReader.readChatLine === 'function' && chatReader.pos) {
       try {
         var _mb2   = chatReader.pos.mainbox;
         var _rect2 = _mb2.rect;
         var _cfO2  = chatReader.font;
         var _rc2   = (chatReader.readargs && chatReader.readargs.colors) ? chatReader.readargs.colors : [];
-        var _t2ref = alt1.captureHold(_rect2.x, _rect2.y, _rect2.width, 250);
-        var _t2img = _t2ref ? _t2ref.toData() : null;
-        if (_t2img && _t2img.data) {
-          var _rmi = chatReader.readChatLine(_mb2, _t2img, 0, 0, _cfO2, _rc2, -1);
+        var _t2    = _cap(_rect2.x, _rect2.y, _rect2.width, 250);  // raw ImgRefBind
+        if (_t2) {
+          var _rmi = chatReader.readChatLine(_mb2, _t2, 0, 0, _cfO2, _rc2, -1);
           if (_rmi && _rmi.text && _rmi.text.length > 1) {
             log('mode indicator: "' + _rmi.text.substring(0, 80) + '"');
             var _miName = extractNameFromOcrText(_rmi.text);
@@ -337,7 +337,7 @@ function tryNameFromLastBuffer() {
             }
           }
         }
-      } catch (_emi) { /* silent — fallthrough to lrbuf ocrYRange */ }
+      } catch (_emi) { log('rcl detect err: ' + _emi); }
     }
 
     var baseY = img.height - 18;
@@ -875,7 +875,7 @@ async function refresh() {
 // ── Initialise ────────────────────────────────────────────────────
 
 function init() {
-  log('=== VGT v2.6 init ===');   // version banner — confirms which file loaded
+  log('=== VGT v2.7 init ===');   // version banner — confirms which file loaded
 
   // ── Load cached name immediately so the UI shows it before the first refresh
   try {
