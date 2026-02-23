@@ -12,7 +12,7 @@ const SHEET_ID    = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
 const SHEET_NAME  = 'List';
 const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
 
-const FORM_URL    = 'https://docs.google.com/forms/d/e/' +
+const FORM_URL    = 'https://docs.google.com/forms/u/2/d/e/' +
                     '1FAIpQLSd_D9dhB-4fOtp1tFmkzyD-ez9rScat76I15GfpoAlREvas7g' +
                     '/formResponse';
 const FORM_ENTRY  = 'entry.1456397394';  // "Your RuneScape name?" field
