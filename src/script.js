@@ -51,6 +51,14 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+function escapeAttr(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 /** Return the player name typed into the input field. */
 function getEffectiveName() {
   return document.getElementById('name-override').value.trim();
@@ -298,9 +306,9 @@ function joinQueue() {
   // Loading it via srcdoc means the form lives in its own document —
   // same-origin to itself — so form.submit() is not a cross-origin call.
   var fbzx = String(Math.floor(Math.random() * 9e15));
-  var safeValue = name.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  var safeValue = escapeAttr(name);
   var srcdoc = [
-    '<!DOCTYPE html><html><body>',
+    '<!doctype html><html><body>',
     '<form id="f" method="POST" action="' + FORM_POST_URL + '">',
     '<input type="hidden" name="' + FORM_ENTRY + '" value="' + safeValue + '">',
     '<input type="hidden" name="fvv" value="1">',
@@ -312,12 +320,14 @@ function joinQueue() {
   ].join('');
 
   var iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:absolute;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.tabIndex = -1;
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
   iframe.srcdoc = srcdoc;
   document.body.appendChild(iframe);
 
   setTimeout(function() {
-    try { document.body.removeChild(iframe); } catch (e) {}
+    try { iframe.remove(); } catch (e) {}
   }, 10000);
 
   btn.textContent = '✓ Submitted!';
