@@ -286,41 +286,6 @@ async function refresh() {
 
 // ── Join Queue ────────────────────────────────────────────────────
 
-function postToGoogleForm(name) {
-  var iframeName = 'vgt_hidden_iframe_' + Date.now();
-  var iframe = document.createElement('iframe');
-  iframe.name = iframeName;
-  iframe.style.display = 'none';
-  document.body.appendChild(iframe);
-
-  var form = document.createElement('form');
-  form.action = FORM_POST_URL;
-  form.method = 'POST';
-  form.target = iframeName;
-  form.style.display = 'none';
-
-  function addField(key, value) {
-    var input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = key;
-    input.value = value;
-    form.appendChild(input);
-  }
-
-  addField(FORM_ENTRY, name);
-  addField('fvv', '1');
-  addField('pageHistory', '0');
-  addField('fbzx', String(Math.floor(Math.random() * 9e15)));
-
-  document.body.appendChild(form);
-  form.submit();
-
-  setTimeout(function() {
-    try { document.body.removeChild(form);   } catch (e) {}
-    try { document.body.removeChild(iframe); } catch (e) {}
-  }, 2000);
-}
-
 function joinQueue() {
   var name = getEffectiveName();
   if (!name) return;
@@ -329,10 +294,26 @@ function joinQueue() {
   btn.disabled    = true;
   btn.textContent = 'Submitting...';
 
-  try {
-    postToGoogleForm(name);
-  } catch (e) {
-    console.warn('[VGT] Form submit error:', e);
+  var params = new URLSearchParams();
+  params.append(FORM_ENTRY, name);
+  params.append('fvv', '1');
+  params.append('pageHistory', '0');
+  params.append('fbzx', String(Math.floor(Math.random() * 9e15)));
+
+  var sent = false;
+
+  // sendBeacon — fire-and-forget POST, bypasses CORS response restrictions
+  if (navigator.sendBeacon) {
+    sent = navigator.sendBeacon(FORM_POST_URL, params);
+  }
+
+  // Fallback: fetch no-cors
+  if (!sent) {
+    fetch(FORM_POST_URL, {
+      method:  'POST',
+      mode:    'no-cors',
+      body:    params,
+    }).catch(function(e) { console.warn('[VGT] Form submit error:', e); });
   }
 
   btn.textContent = '✓ Submitted!';
