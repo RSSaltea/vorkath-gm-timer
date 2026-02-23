@@ -96,6 +96,19 @@ function initChatbox() {
   try {
     chatReader = new Chatbox.default();
 
+    // Tell the reader which chat text colours to scan for.
+    if (typeof mixColor === 'function') {
+      chatReader.readargs = {
+        colors: [
+          mixColor(69,  131, 145),   // name colour
+          mixColor(153, 255, 153),   // green text
+          mixColor(255, 255, 255),   // white text
+          mixColor(127, 169, 255),   // public chat blue
+        ],
+        backwards: true,
+      };
+    }
+
     // Wrap in setTimeout so Alt1 has time to finish app identification first.
     setTimeout(function () {
       var finder = setInterval(function () {
@@ -401,13 +414,6 @@ function init() {
   document.getElementById('refresh-btn').addEventListener('click', refresh);
   document.getElementById('refresh-btn-queue').addEventListener('click', refresh);
 
-  // ── Identify app to Alt1 (grants pixel/gamestate permissions)
-  if (typeof alt1 !== 'undefined') {
-    try {
-      alt1.identifyAppUrl('./appconfig.json');
-    } catch (e) {}
-  }
-
   // ── Start chatbox reader (shows Alt1 capture overlay)
   initChatbox();
 
@@ -416,6 +422,11 @@ function init() {
 
   // ── Auto-refresh
   refreshTimer = setInterval(refresh, REFRESH_MS);
+}
+
+// ── Identify app to Alt1 immediately on script load (must run before chatbox)
+if (typeof alt1 !== 'undefined') {
+  try { alt1.identifyAppUrl('./appconfig.json'); } catch (e) {}
 }
 
 if (document.readyState === 'loading') {
