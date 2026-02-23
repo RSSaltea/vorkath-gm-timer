@@ -92,17 +92,24 @@ function detectName() {
 
 function initChatbox() {
   if (typeof alt1 === 'undefined') return;
+  if (typeof Chatbox === 'undefined') return;
   try {
-    var ReaderClass = (typeof ChatboxReader !== 'undefined') ? ChatboxReader
-                    : (typeof Chatbox       !== 'undefined') ? (Chatbox.default || Chatbox)
-                    : null;
-    if (!ReaderClass) return;
-    chatReader = new ReaderClass();
-    // Polling .read() every 600 ms makes Alt1 display the capture-box
-    // overlay on the RS client so users can see the plugin is active.
-    setInterval(function () {
-      try { chatReader.read(); } catch (e) {}
-    }, 600);
+    chatReader = new Chatbox.default();
+
+    // find() locates the chatbox on screen and makes the green overlay appear.
+    // Keep calling it until reader.pos is set, then switch to read().
+    var finder = setInterval(function () {
+      try {
+        if (!chatReader.pos) {
+          chatReader.find();
+        } else {
+          clearInterval(finder);
+          setInterval(function () {
+            try { chatReader.read(); } catch (e) {}
+          }, 600);
+        }
+      } catch (e) {}
+    }, 800);
   } catch (e) {
     // Chatbox library not available
   }
