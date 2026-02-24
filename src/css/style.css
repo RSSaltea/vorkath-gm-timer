@@ -459,6 +459,42 @@ body.nis {
 ::-webkit-scrollbar-thumb:hover { background: #44445a !important; background-image: none !important; }
 ::-webkit-scrollbar-corner      { background: transparent !important; }
 
+/* ── Alt1 Install Banner ─────────────────────────────────────────── */
+.vgt-alt1-banner {
+  display: none;  /* shown by JS when alt1 is not detected */
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+.vgt-alt1-banner span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.vgt-alt1-install-btn {
+  display: inline-block;
+  background: linear-gradient(180deg, #3a7fd5 0%, #2563b0 100%);
+  color: #fff;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(74, 158, 255, 0.3);
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+
+.vgt-alt1-install-btn:hover {
+  opacity: 0.85;
+}
+
 /* ── Join Queue Button ───────────────────────────────────────────── */
 .vgt-join-btn {
   display: none;       /* shown by JS only when player is not in queue */

@@ -393,6 +393,10 @@ if (typeof alt1 !== 'undefined') {
   } catch (e) {
     console.error('[VGT] identifyAppUrl error:', e);
   }
+} else {
+  // Running in a regular browser — show the install banner
+  var banner = document.getElementById('alt1-banner');
+  if (banner) banner.style.display = 'flex';
 }
 
 if (document.readyState === 'loading') {
