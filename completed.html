@@ -110,7 +110,6 @@
   <div class="container">
     <div class="header">
       <div class="title">Completed Kills</div>
-      <div class="count" id="count"></div>
     </div>
     <div class="search-wrap">
       <input class="search-input" id="search" type="text" placeholder="Search names..." autocomplete="off" spellcheck="false" />
@@ -138,7 +137,6 @@
           if (name && name.toLowerCase() !== 'your runescape name?') names.push(name);
         }
         completedData = names;
-        document.getElementById('count').textContent = names.length + ' players';
         renderList('');
       } catch (err) {
         document.getElementById('list').innerHTML = '<div class="loading">Failed to load.</div>';
