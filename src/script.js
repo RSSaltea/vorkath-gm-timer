@@ -13,7 +13,7 @@ const SHEET_NAME  = 'List';
 const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
 
 const GAS_URL = 'https://script.google.com/macros/s/' +
-                'AKfycbz86LKVqJbhHVia_J2l9I0zGPTZY25L5iyLpG_bpyifdCq1b3mZEnCR4h6JtD0d6COCoQ' +
+                'AKfycbz0DwSXtXAqhAqbKNn83_omaF4Ke3tnzabEijNIOC91phn_9zoEOsifh643jBXjnUzM7Q' +
                 '/exec';
 
 const HEARTBEAT_MS         = 15_000;  // send heartbeat every 15 s
