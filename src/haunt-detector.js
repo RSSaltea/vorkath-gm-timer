@@ -120,6 +120,18 @@
       console.log('[VGT-haunt] Scan #' + tick + ' — RS ' + alt1.rsWidth + 'x' + alt1.rsHeight);
     }
 
+    // Debug: log raw bindFindSubImg result for zemouregal on first 3 scans
+    if (tick <= 3 && needles['zemouregal'] && handle > 0) {
+      try {
+        var raw = alt1.bindFindSubImg(handle, needles['zemouregal'],
+                    refs['zemouregal'].width, 0, 0, alt1.rsWidth, alt1.rsHeight);
+        console.log('[VGT-haunt-debug] zemouregal raw result:', raw,
+                    '| handle:', handle,
+                    '| needle length:', needles['zemouregal'].length,
+                    '| bindFindSubImg type:', typeof alt1.bindFindSubImg);
+      } catch(e) { console.warn('[VGT-haunt-debug] raw test error:', e); }
+    }
+
     // Short-circuit: require all three trigger images
     if (!imageFound('zemouregal'))   return;
     if (!imageFound('vorkath'))      return;
@@ -168,7 +180,9 @@
       loadRef('ghostHaunt',   './src/img/ghost_haunt.png'),
     ]).then(function () {
       var ok = Object.keys(refs).filter(function (n) { return refs[n] !== null; }).length;
-      console.log('[VGT-haunt] ' + ok + '/4 images loaded. Scanning every ' + SCAN_MS + 'ms.');
+        console.log('[VGT-haunt] ' + ok + '/4 images loaded. Scanning every ' + SCAN_MS + 'ms.');
+      var bindFns = Object.keys(alt1).filter(function(k){ return k.indexOf('bind') !== -1 || k.indexOf('Bind') !== -1; });
+      console.log('[VGT-haunt] alt1 bind functions available:', bindFns.join(', '));
       setInterval(scan, SCAN_MS);
     });
   }
