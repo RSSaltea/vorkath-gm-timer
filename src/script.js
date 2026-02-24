@@ -343,7 +343,7 @@ async function fetchWorld() {
 async function fetchConfigSeed() {
   try {
     var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              '/gviz/tq?tqx=out:csv&sheet=Responses&range=H2';
+              '/gviz/tq?tqx=out:csv&sheet=Responses&range=H1';
     var resp = await fetch(url, { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var text = await resp.text();
