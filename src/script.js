@@ -292,7 +292,9 @@ function updateCompletedPanel() {
   if (!toggleBtn || !listEl) return;
 
   var arrow = toggleBtn.textContent.slice(-1);
-  toggleBtn.textContent = 'Completed (' + completedData.length + ') ' + arrow;
+  toggleBtn.textContent = calibrated
+    ? 'Completed (' + completedData.length + ') ' + arrow
+    : 'Completed ' + arrow;
 
   var search = (document.getElementById('completed-search') || {}).value || '';
   renderCompletedList(search);
@@ -798,8 +800,10 @@ function init() {
     var body = document.getElementById('completed-body');
     var open = body.style.display !== 'none';
     body.style.display = open ? 'none' : 'block';
-    var count = completedData.length;
-    this.textContent = 'Completed (' + count + ') ' + (open ? '\u25B8' : '\u25BE');
+    var arrow = open ? '\u25B8' : '\u25BE';
+    this.textContent = calibrated
+      ? 'Completed (' + completedData.length + ') ' + arrow
+      : 'Completed ' + arrow;
   });
 
   document.getElementById('completed-search').addEventListener('input', function() {
