@@ -966,3 +966,7 @@ body.browser-view .vgt-tab {
 body.browser-view .vgt-info-list li {
   font-size: 14.4px;
 }
+
+body.browser-view .vgt-reminder-toggle {
+  display: none;
+}
