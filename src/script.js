@@ -832,6 +832,7 @@ if (typeof alt1 !== 'undefined') {
   }
 } else {
   // Running in a regular browser — show the install banner
+  document.body.classList.add('browser-view');
   var banner = document.getElementById('alt1-banner');
   if (banner) banner.style.display = 'flex';
 }

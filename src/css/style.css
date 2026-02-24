@@ -932,3 +932,24 @@ body.nis {
   background: var(--bg-card);
   border-radius: var(--radius-sm);
 }
+
+/* ── Browser View (not in Alt1) ───────────────────────────────── */
+body.browser-view {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  background: #0a0a0e;
+}
+
+body.browser-view .vgt-app {
+  width: 100%;
+  max-width: 320px;
+  margin: 24px auto 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  height: auto;
+  min-height: calc(100vh - 48px);
+}
