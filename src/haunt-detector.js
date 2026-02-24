@@ -1,14 +1,16 @@
 /* ================================================================
-   Vorkath GM Timer — haunt-detector.js  v1.4
+   Vorkath GM Timer — haunt-detector.js  v1.6
    ================================================================
-   Uses alt1.bindRegion + alt1.bindFindSubImg directly —
-   the same native functions used internally by a1lib,
-   without depending on any library global being available.
+   Uses alt1.bindRegion + alt1.bindFindSubImg directly.
 
    Scans the full RS screen every 4 ticks (2400 ms).
    Trigger:   zemouregal + vorkath + ghost_trigger all visible
    Condition: ghost_haunt NOT visible
    Action:    flash "Command Ghost for Haunt" at screen centre
+
+   v1.6 fix: load reference images via fetch + createImageBitmap
+   with colorSpaceConversion:'none' so Chromium does not apply
+   sRGB gamma transforms that alter pixel values and break matching.
    ================================================================ */
 
 'use strict';
@@ -42,29 +44,33 @@
     return btoa(bytes);
   }
 
-  // ── Load a reference PNG as canvas ImageData ─────────────────────
+  // ── Load reference PNG without sRGB colour-space transformation ───
+  // new Image() / drawImage lets Chromium apply sRGB gamma correction,
+  // producing pixel values that don't match the raw RS screen pixels.
+  // fetch + createImageBitmap({colorSpaceConversion:'none'}) bypasses
+  // that transform — the same approach used by a1lib internally.
   function loadRef(name, path) {
-    return new Promise(function (resolve) {
-      var img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = function () {
+    return fetch(path)
+      .then(function (r) { return r.blob(); })
+      .then(function (blob) {
+        return createImageBitmap(blob, { colorSpaceConversion: 'none' });
+      })
+      .then(function (bitmap) {
         var c = document.createElement('canvas');
-        c.width  = img.naturalWidth;
-        c.height = img.naturalHeight;
-        c.getContext('2d').drawImage(img, 0, 0);
+        c.width  = bitmap.width;
+        c.height = bitmap.height;
+        c.getContext('2d').drawImage(bitmap, 0, 0);
         refs[name]    = c.getContext('2d').getImageData(0, 0, c.width, c.height);
         needles[name] = encodeNeedle(refs[name]);
-        console.log('[VGT-haunt] Loaded "' + name + '" (' + refs[name].width + 'x' + refs[name].height + ')');
-        resolve();
-      };
-      img.onerror = function () {
-        console.warn('[VGT-haunt] Could not load:', path);
+        var d = refs[name].data;
+        console.log('[VGT-haunt] Loaded "' + name + '" (' + refs[name].width + 'x' + refs[name].height + ')'
+                  + ' | px0 RGBA(' + d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + ')');
+      })
+      .catch(function (e) {
+        console.warn('[VGT-haunt] Could not load:', path, e);
         refs[name]    = null;
         needles[name] = null;
-        resolve();
-      };
-      img.src = path;
-    });
+      });
   }
 
   // ── Capture + search ─────────────────────────────────────────────
@@ -120,18 +126,6 @@
       console.log('[VGT-haunt] Scan #' + tick + ' — RS ' + alt1.rsWidth + 'x' + alt1.rsHeight);
     }
 
-    // Debug: log raw bindFindSubImg result for zemouregal on first 3 scans
-    if (tick <= 3 && needles['zemouregal'] && handle > 0) {
-      try {
-        var raw = alt1.bindFindSubImg(handle, needles['zemouregal'],
-                    refs['zemouregal'].width, 0, 0, alt1.rsWidth, alt1.rsHeight);
-        console.log('[VGT-haunt-debug] zemouregal raw result:', raw,
-                    '| handle:', handle,
-                    '| needle length:', needles['zemouregal'].length,
-                    '| bindFindSubImg type:', typeof alt1.bindFindSubImg);
-      } catch(e) { console.warn('[VGT-haunt-debug] raw test error:', e); }
-    }
-
     // Short-circuit: require all three trigger images
     if (!imageFound('zemouregal'))   return;
     if (!imageFound('vorkath'))      return;
@@ -149,29 +143,7 @@
 
   // ── Init ──────────────────────────────────────────────────────────
   function init() {
-    console.log('[VGT-haunt] Starting up...');
-
-    if (!alt1.bindFindSubImg) {
-      // Try library globals as fallback
-      var lib = (typeof a1lib !== 'undefined' && a1lib) ||
-                (typeof A1lib !== 'undefined' && A1lib) || null;
-      if (!lib || !lib.findSubimage) {
-        console.error('[VGT-haunt] No image detection API found (bindFindSubImg, a1lib, A1lib all missing)');
-        return;
-      }
-      // Rewire to use library findSubimage
-      console.log('[VGT-haunt] Using library findSubimage fallback');
-      imageFound = function (name) {
-        if (!refs[name]) return false;
-        try {
-          var screen = lib.captureHoldFullRs ? lib.captureHoldFullRs() :
-                       lib.captureHold(0, 0, alt1.rsWidth, alt1.rsHeight);
-          var hits = lib.findSubimage(screen, refs[name]);
-          return hits && hits.length > 0;
-        } catch (e) { return false; }
-      };
-      capture = function () { return true; }; // no-op in library mode
-    }
+    console.log('[VGT-haunt] Starting up (v1.6)...');
 
     Promise.all([
       loadRef('zemouregal',   './src/img/zemouregal.png'),
@@ -180,9 +152,7 @@
       loadRef('ghostHaunt',   './src/img/ghost_haunt.png'),
     ]).then(function () {
       var ok = Object.keys(refs).filter(function (n) { return refs[n] !== null; }).length;
-        console.log('[VGT-haunt] ' + ok + '/4 images loaded. Scanning every ' + SCAN_MS + 'ms.');
-      var bindFns = Object.keys(alt1).filter(function(k){ return k.indexOf('bind') !== -1 || k.indexOf('Bind') !== -1; });
-      console.log('[VGT-haunt] alt1 bind functions available:', bindFns.join(', '));
+      console.log('[VGT-haunt] ' + ok + '/4 images loaded. Scanning every ' + SCAN_MS + 'ms.');
       setInterval(scan, SCAN_MS);
     });
   }
