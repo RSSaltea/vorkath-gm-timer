@@ -944,7 +944,7 @@ body.browser-view {
 
 body.browser-view .vgt-app {
   width: 100%;
-  max-width: 320px;
+  max-width: 380px;
   margin: 24px auto 0;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -952,4 +952,17 @@ body.browser-view .vgt-app {
   box-shadow: 0 4px 24px rgba(0,0,0,0.5);
   height: auto;
   min-height: calc(100vh - 48px);
+}
+
+body.browser-view .vgt-tabs {
+  background: var(--bg-card-alt);
+  border-color: var(--accent);
+}
+
+body.browser-view .vgt-tab {
+  font-size: 13px;
+}
+
+body.browser-view .vgt-info-list li {
+  font-size: 14.4px;
 }
