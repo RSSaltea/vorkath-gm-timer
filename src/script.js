@@ -202,10 +202,10 @@ function updateToggleOpenBtn() {
   if (calibrated) {
     btn.style.display = '';
     if (submissionsOpen) {
-      btn.innerHTML = 'Currently:<br>Open';
+      btn.textContent = 'Open';
       btn.classList.add('open');
     } else {
-      btn.innerHTML = 'Currently:<br>Closed';
+      btn.textContent = 'Closed';
       btn.classList.remove('open');
     }
   } else {
