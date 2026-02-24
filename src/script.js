@@ -16,8 +16,8 @@ const GAS_URL = 'https://script.google.com/macros/s/' +
                 'AKfycbzPxwizWq7ewt0UBWlRSNbHlSbjjV5kQBXjIGghvCdMYSpCke3ZpT-R5oj-KWghfwrb' +
                 '/exec';
 
-const HEARTBEAT_MS         = 30_000;  // send heartbeat every 30 s
-const ONLINE_THRESHOLD_MS  = 60_000;  // online if heartbeat < 60 s old
+const HEARTBEAT_MS         = 15_000;  // send heartbeat every 15 s
+const ONLINE_THRESHOLD_MS  = 20_000;  // online if heartbeat < 20 s old
 
 // ── State ─────────────────────────────────────────────────────────
 let queueData       = [];   // current full queue (array of strings)
