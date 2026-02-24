@@ -593,6 +593,8 @@ body.nis {
   justify-content: center;
   gap: 7px;
   text-decoration: none;
+  border: none;
+  cursor: pointer;
   border-radius: var(--radius);
   padding: 10px 14px;
   font-size: 13px;
