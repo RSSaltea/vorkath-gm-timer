@@ -692,3 +692,133 @@ body.nis {
   height: 18px;
   flex-shrink: 0;
 }
+
+/* ── Admin Button ──────────────────────────────────────────────── */
+.vgt-admin-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  padding: 3px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.vgt-admin-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.vgt-admin-btn.active {
+  border-color: var(--turn);
+  color: var(--turn);
+}
+
+/* ── Admin Overlay ─────────────────────────────────────────────── */
+.vgt-admin-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.vgt-admin-dialog {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vgt-admin-dialog-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.vgt-admin-dialog-btns > * {
+  flex: 1;
+}
+
+.vgt-admin-login-btn {
+  display: block !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  text-align: center;
+}
+
+.vgt-admin-error {
+  font-size: 11px;
+  color: var(--error);
+  text-align: center;
+}
+
+/* ── Admin Action Buttons (queue items) ─────────────────────────── */
+.vgt-admin-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.vgt-admin-action {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.vgt-admin-action:active {
+  opacity: 0.6;
+}
+
+.vgt-admin-action.done {
+  color: var(--turn);
+  border-color: rgba(76, 175, 80, 0.3);
+}
+
+.vgt-admin-action.done:hover {
+  background: var(--turn-dim);
+  border-color: var(--turn);
+}
+
+.vgt-admin-action.skip {
+  color: var(--error);
+  border-color: rgba(244, 67, 54, 0.3);
+}
+
+.vgt-admin-action.skip:hover {
+  background: rgba(244, 67, 54, 0.12);
+  border-color: var(--error);
+}
+
+.vgt-admin-action.ping {
+  color: var(--accent);
+  border-color: rgba(74, 158, 255, 0.3);
+}
+
+.vgt-admin-action.ping:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.vgt-admin-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

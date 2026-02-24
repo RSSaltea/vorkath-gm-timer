@@ -13,7 +13,7 @@ const SHEET_NAME  = 'List';
 const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
 
 const GAS_URL = 'https://script.google.com/macros/s/' +
-                'AKfycbzPxwizWq7ewt0UBWlRSNbHlSbjjV5kQBXjIGghvCdMYSpCke3ZpT-R5oj-KWghfwrb' +
+                'AKfycbzDYknfVrNoGle2YGCySPap3-VWrRhhMqyLx-nTa2DygvU_DEX2OAzJyP6EntVC8t6FHw' +
                 '/exec';
 
 const HEARTBEAT_MS         = 15_000;  // send heartbeat every 15 s
@@ -28,6 +28,9 @@ let submissionsOpen = true; // controlled by Responses!G947
 let heartbeatTimer  = null;
 let heartbeatData   = {};    // { lowercaseName: isoTimestamp }
 let currentWorld    = '';     // world number from Responses!F2
+let calibrated      = false;
+let configSeed      = null;
+let lastPingCheck   = new Date().toISOString();
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -232,12 +235,23 @@ function updateQueueList(queue) {
     var dotClass = online ? 'vgt-presence online' : 'vgt-presence offline';
     var dotTitle = online ? 'Online — plugin active' : 'Offline — plugin not detected';
 
+    var adminBtns = '';
+    if (calibrated) {
+      adminBtns =
+        '<span class="vgt-admin-actions">' +
+          '<button class="vgt-admin-action done" data-action="adminDone" data-name="' + escapeHtml(n) + '" title="Mark Done">\u2713</button>' +
+          '<button class="vgt-admin-action skip" data-action="adminSkip" data-name="' + escapeHtml(n) + '" title="Mark Skip">\u2717</button>' +
+          '<button class="vgt-admin-action ping" data-action="ping" data-name="' + escapeHtml(n) + '" title="Ping Player">\u266A</button>' +
+        '</span>';
+    }
+
     html +=
       '<div class="' + cls + '">' +
         '<span class="vgt-queue-rank">#' + rank + '</span>' +
         '<span class="' + dotClass + '" title="' + dotTitle + '"></span>' +
         '<span class="vgt-queue-name">' + escapeHtml(n) + youTag + '</span>' +
         badge +
+        adminBtns +
       '</div>';
   }
 
@@ -324,6 +338,86 @@ async function fetchWorld() {
   }
 }
 
+// ── Config seed ──────────────────────────────────────────────────
+
+async function fetchConfigSeed() {
+  try {
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+              '/gviz/tq?tqx=out:csv&sheet=Responses&range=H2';
+    var resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var text = await resp.text();
+    configSeed = text.replace(/^"|"$/g, '').trim();
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch config seed:', err);
+    configSeed = null;
+  }
+}
+
+// ── Pings ─────────────────────────────────────────────────────────
+
+async function fetchPings() {
+  var name = getEffectiveName();
+  if (!name) return;
+
+  try {
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+              '/gviz/tq?tqx=out:csv&sheet=Pings&range=A2:B';
+    var resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var text = await resp.text();
+    var rows = text.split('\n');
+    var nameLower = name.toLowerCase();
+
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i].trim()) continue;
+      var idx = rows[i].indexOf(',');
+      if (idx === -1) continue;
+      var pingName = rows[i].substring(0, idx).replace(/^"|"$/g, '').trim().toLowerCase();
+      var pingTime = rows[i].substring(idx + 1).replace(/^"|"$/g, '').trim();
+      if (pingName === nameLower) {
+        var pingDate = new Date(pingTime).getTime();
+        var lastCheck = new Date(lastPingCheck).getTime();
+        if (!isNaN(pingDate) && pingDate > lastCheck) {
+          playAlert('turn');
+          console.log('[VGT] Ping received! Timestamp:', pingTime);
+        }
+        break;
+      }
+    }
+
+    lastPingCheck = new Date().toISOString();
+  } catch (err) {
+    console.warn('[VGT] Ping fetch failed:', err);
+  }
+}
+
+// ── Queue actions ─────────────────────────────────────────────────
+
+async function runAction(action, name, btnEl) {
+  if (!calibrated) return;
+  btnEl.disabled = true;
+
+  try {
+    var resp = await fetch(
+      GAS_URL + '?action=' + action + '&name=' + encodeURIComponent(name),
+      { cache: 'no-store' }
+    );
+    var data = await resp.json();
+    if (data.ok) {
+      btnEl.textContent = '\u2713';
+      setTimeout(refresh, 1500);
+    } else {
+      btnEl.textContent = '!';
+      btnEl.disabled = false;
+    }
+  } catch (err) {
+    console.warn('[VGT] Action failed:', err);
+    btnEl.textContent = '!';
+    btnEl.disabled = false;
+  }
+}
+
 // ── Heartbeat ─────────────────────────────────────────────────────
 
 async function sendHeartbeat() {
@@ -374,7 +468,7 @@ function isOnline(name) {
 async function refresh() {
   setDot('loading');
 
-  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld()]);
+  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings()]);
   var queue   = results[0];
 
   if (queue) {
@@ -480,9 +574,78 @@ function init() {
   // ── Auto-refresh
   refreshTimer = setInterval(refresh, REFRESH_MS);
 
-  // ── Heartbeat — announce presence every 30 s
+  // ── Heartbeat — announce presence every 15 s
   sendHeartbeat();
   heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
+
+  // ── Calibration mode ───────────────────────────────────────────
+  fetchConfigSeed();
+
+  var adminBtn       = document.getElementById('admin-btn');
+  var adminOverlay   = document.getElementById('admin-overlay');
+  var adminPassInput = document.getElementById('admin-pass-input');
+  var adminLoginBtn  = document.getElementById('admin-login-btn');
+  var adminCancelBtn = document.getElementById('admin-cancel-btn');
+  var adminError     = document.getElementById('admin-error');
+
+  adminBtn.addEventListener('click', function() {
+    if (calibrated) {
+      calibrated = false;
+      adminBtn.textContent = 'Admin';
+      adminBtn.classList.remove('active');
+      updateQueueList(queueData);
+      return;
+    }
+    adminOverlay.style.display = 'flex';
+    adminPassInput.value = '';
+    adminError.style.display = 'none';
+    adminPassInput.focus();
+  });
+
+  adminCancelBtn.addEventListener('click', function() {
+    adminOverlay.style.display = 'none';
+  });
+
+  function attemptCalibration() {
+    var entered = adminPassInput.value.trim();
+    if (!configSeed) {
+      adminError.textContent = 'Could not verify — retry';
+      adminError.style.display = 'block';
+      fetchConfigSeed();
+      return;
+    }
+    if (entered === configSeed) {
+      calibrated = true;
+      adminOverlay.style.display = 'none';
+      adminBtn.textContent = 'Admin \u2713';
+      adminBtn.classList.add('active');
+      updateQueueList(queueData);
+    } else {
+      adminError.textContent = 'Invalid key';
+      adminError.style.display = 'block';
+      adminPassInput.value = '';
+      adminPassInput.focus();
+    }
+  }
+
+  adminLoginBtn.addEventListener('click', attemptCalibration);
+
+  adminPassInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') attemptCalibration();
+    if (e.key === 'Escape') adminOverlay.style.display = 'none';
+  });
+
+  // ── Queue action delegation (single listener) ──────────────────
+  document.getElementById('queue-list').addEventListener('click', function(e) {
+    if (!calibrated) return;
+    var btn = e.target.closest('.vgt-admin-action');
+    if (!btn || btn.disabled) return;
+    var action = btn.getAttribute('data-action');
+    var name   = btn.getAttribute('data-name');
+    if (action && name) {
+      runAction(action, name, btn);
+    }
+  });
 }
 
 // ── Identify app to Alt1 on script load ───────────────────────────

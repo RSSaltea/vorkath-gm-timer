@@ -13,7 +13,7 @@
 
   <link rel="stylesheet" href="https://runeapps.org/nis/nis.css" />
   <link rel="stylesheet" href="./src/css/nis.css?v=1.0" />
-  <link rel="stylesheet" href="./src/css/style.css?v=2.2" />
+  <link rel="stylesheet" href="./src/css/style.css?v=2.3" />
 </head>
 <body class="nis">
 
@@ -70,6 +70,7 @@
       <div class="vgt-footer">
         <span id="last-updated">Not yet updated</span>
         <button class="vgt-refresh-btn" id="refresh-btn">↻ Refresh</button>
+        <button class="vgt-admin-btn" id="admin-btn">Admin</button>
       </div>
 
     </div>
@@ -128,9 +129,29 @@
 
     </div>
 
+    <!-- Admin login overlay -->
+    <div class="vgt-admin-overlay" id="admin-overlay" style="display:none;">
+      <div class="vgt-admin-dialog">
+        <div class="vgt-label">Calibration</div>
+        <input
+          class="vgt-name-input"
+          id="admin-pass-input"
+          type="password"
+          placeholder="Enter key..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="vgt-admin-dialog-btns">
+          <button class="vgt-refresh-btn" id="admin-cancel-btn">Cancel</button>
+          <button class="vgt-join-btn vgt-admin-login-btn" id="admin-login-btn">Login</button>
+        </div>
+        <div class="vgt-admin-error" id="admin-error" style="display:none;">Invalid key</div>
+      </div>
+    </div>
+
   </div>
 
-  <script src="./src/script.js?v=3.21"></script>
+  <script src="./src/script.js?v=3.22"></script>
   <script src="./src/haunt-detector.js?v=2.2"></script>
   <script src="./src/chat-reader.js?v=2.7"></script>
 </body>
