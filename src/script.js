@@ -31,6 +31,7 @@ let currentWorld    = '';     // world number from Responses!F2
 let calibrated      = false;
 let configSeed      = null;
 let lastPingCheck   = new Date().toISOString();
+let completedData   = [];     // names marked "done" in Responses!C
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -112,7 +113,14 @@ function updateStatus(queue) {
     alertTitle.textContent = 'No name set';
     alertSub.textContent   = 'Enter your RS name in the box above';
     posEl.textContent      = '—';
-    joinBtn.style.display  = 'none';
+    if (!submissionsOpen) {
+      joinBtn.style.display = 'block';
+      joinBtn.disabled      = true;
+      joinBtn.textContent   = 'Submissions closed';
+      joinBtn.classList.add('closed');
+    } else {
+      joinBtn.style.display = 'none';
+    }
     return;
   }
 
@@ -276,6 +284,61 @@ function updateQueueList(queue) {
   listEl.innerHTML = html;
 }
 
+// ── Completed panel ──────────────────────────────────────────────
+
+function updateCompletedPanel() {
+  var toggleBtn = document.getElementById('completed-toggle');
+  var listEl    = document.getElementById('completed-list');
+  if (!toggleBtn || !listEl) return;
+
+  var arrow = toggleBtn.textContent.slice(-1);
+  toggleBtn.textContent = 'Completed (' + completedData.length + ') ' + arrow;
+
+  var search = (document.getElementById('completed-search') || {}).value || '';
+  renderCompletedList(search);
+}
+
+function renderCompletedList(filter) {
+  var listEl = document.getElementById('completed-list');
+  if (!listEl) return;
+  var filtered = completedData;
+  if (filter) {
+    var f = filter.toLowerCase();
+    filtered = completedData.filter(function(n) {
+      return n.toLowerCase().indexOf(f) !== -1;
+    });
+  }
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div class="vgt-completed-item" style="color:var(--text-muted);">No results</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < filtered.length; i++) {
+    html += '<div class="vgt-completed-item">' + escapeHtml(filtered[i]) + '</div>';
+  }
+  listEl.innerHTML = html;
+}
+
+function showCompletedSuggestions(value) {
+  var el = document.getElementById('completed-suggestions');
+  if (!el) return;
+  if (!value) { el.style.display = 'none'; return; }
+  var v = value.toLowerCase();
+  var matches = completedData.filter(function(n) {
+    return n.toLowerCase().indexOf(v) !== -1;
+  });
+  if (matches.length === 0 || (matches.length === 1 && matches[0].toLowerCase() === v)) {
+    el.style.display = 'none';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < Math.min(matches.length, 8); i++) {
+    html += '<div class="vgt-completed-suggestion" data-name="' + escapeHtml(matches[i]) + '">' + escapeHtml(matches[i]) + '</div>';
+  }
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
 // ── Audio alert ───────────────────────────────────────────────────
 
 function playAlert(type) {
@@ -374,6 +437,34 @@ async function fetchStats() {
     if (elToday) elToday.textContent = 'Today: ' + (today || '—');
   } catch (err) {
     console.warn('[VGT] Failed to fetch stats:', err);
+  }
+}
+
+// ── Completed list ───────────────────────────────────────────────
+
+async function fetchCompleted() {
+  try {
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+              '/gviz/tq?tqx=out:csv&sheet=Responses&range=B2:C';
+    var resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var text = await resp.text();
+    var lines = text.split('\n');
+    var names = [];
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+      var match = line.match(/^"?([^"]*)"?\s*,\s*"?([^"]*)"?$/);
+      if (match) {
+        var name = match[1].trim();
+        var status = match[2].trim().toLowerCase();
+        if (name && status === 'done') names.push(name);
+      }
+    }
+    completedData = names;
+    updateCompletedPanel();
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch completed:', err);
   }
 }
 
@@ -507,7 +598,7 @@ function isOnline(name) {
 async function refresh() {
   setDot('loading');
 
-  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats()]);
+  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats(), fetchCompleted()]);
   var queue   = results[0];
 
   if (queue) {
@@ -701,6 +792,31 @@ function init() {
       console.warn('[VGT] Failed to toggle open:', err);
     }
     btn.disabled = false;
+  });
+
+  // ── Completed panel toggle + search ─────────────────────────────
+  document.getElementById('completed-toggle').addEventListener('click', function() {
+    var body = document.getElementById('completed-body');
+    var open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    var count = completedData.length;
+    this.textContent = 'Completed (' + count + ') ' + (open ? '\u25B8' : '\u25BE');
+  });
+
+  document.getElementById('completed-search').addEventListener('input', function() {
+    var val = this.value.trim();
+    renderCompletedList(val);
+    showCompletedSuggestions(val);
+  });
+
+  document.getElementById('completed-suggestions').addEventListener('click', function(e) {
+    var item = e.target.closest('.vgt-completed-suggestion');
+    if (!item) return;
+    var name = item.getAttribute('data-name');
+    var input = document.getElementById('completed-search');
+    input.value = name;
+    renderCompletedList(name);
+    this.style.display = 'none';
   });
 }
 

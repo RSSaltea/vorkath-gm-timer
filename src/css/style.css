@@ -853,3 +853,82 @@ body.nis {
   opacity: 0.35;
   cursor: default;
 }
+
+/* ── Completed Panel ──────────────────────────────────────────── */
+.vgt-completed-panel {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-soft);
+  margin-top: 6px;
+}
+
+.vgt-completed-toggle {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.vgt-completed-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.vgt-completed-body {
+  padding-top: 6px;
+}
+
+.vgt-completed-search-wrap {
+  position: relative;
+  margin-bottom: 6px;
+}
+
+.vgt-completed-search-wrap .vgt-name-input {
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.vgt-completed-suggestions {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-height: 120px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.vgt-completed-suggestion {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.vgt-completed-suggestion:hover {
+  background: var(--bg-hover);
+}
+
+.vgt-completed-list {
+  max-height: 150px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vgt-completed-item {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+}
