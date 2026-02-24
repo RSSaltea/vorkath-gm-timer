@@ -27,6 +27,7 @@ let refreshTimer    = null;
 let submissionsOpen = true; // controlled by Responses!G947
 let heartbeatTimer  = null;
 let heartbeatData   = {};    // { lowercaseName: isoTimestamp }
+let currentWorld    = '';     // world number from Responses!F2
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -152,7 +153,9 @@ function updateStatus(queue) {
     setCard(alertCard, 'turn');
     alertIcon.textContent  = '🐉';
     alertTitle.textContent = "It's your turn!";
-    alertSub.textContent   = 'Head to Vorkath now!';
+    alertSub.textContent   = currentWorld
+      ? 'Head to Vorkath on World: ' + currentWorld + ' now!'
+      : 'Head to Vorkath now!';
     if (!wasFirst) playAlert('turn');
     wasFirst      = true;
     wasInTopThree = true;
@@ -164,7 +167,9 @@ function updateStatus(queue) {
     setCard(alertCard, 'soon');
     alertIcon.textContent  = '⚠️';
     alertTitle.textContent = 'Get ready!';
-    alertSub.textContent   = 'You are #' + rank + ' — up soon';
+    alertSub.textContent   = currentWorld
+      ? 'You are #' + rank + ' — head to World: ' + currentWorld + ' please'
+      : 'You are #' + rank + ' — up soon';
     if (!wasInTopThree) playAlert('soon');
     wasInTopThree = true;
     wasFirst      = false;
@@ -302,6 +307,21 @@ async function fetchSubmissionsOpen() {
   }
 }
 
+async function fetchWorld() {
+  try {
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+              '/gviz/tq?tqx=out:csv&sheet=Responses&range=F2';
+    var resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var text = await resp.text();
+    currentWorld = text.replace(/"/g, '').trim();
+    var el = document.getElementById('vgt-world');
+    if (el) el.textContent = currentWorld ? 'World: ' + currentWorld : '';
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch world:', err);
+  }
+}
+
 // ── Heartbeat ─────────────────────────────────────────────────────
 
 async function sendHeartbeat() {
@@ -352,7 +372,7 @@ function isOnline(name) {
 async function refresh() {
   setDot('loading');
 
-  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats()]);
+  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld()]);
   var queue   = results[0];
 
   if (queue) {
