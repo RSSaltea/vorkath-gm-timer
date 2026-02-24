@@ -1,16 +1,11 @@
 /* ================================================================
-   Vorkath GM Timer — haunt-detector.js  v1.7
+   Vorkath GM Timer — haunt-detector.js  v1.8
    ================================================================
-   Switches from native alt1.bindFindSubImg (zero-tolerance exact
-   matching) to A1lib.captureHoldFullRs() + ImgRef.findSubimage(),
-   which is the standard approach used by AFKWarden, buff bars, etc.
-   findSubimage uses tolerance-based template matching and handles
-   the Alt1 memory model correctly.
-
-   Scans the full RS screen every 4 ticks (2400 ms).
-   Trigger:   zemouregal + vorkath + ghost_trigger all visible
-   Condition: ghost_haunt NOT visible
-   Action:    flash "Command Ghost for Haunt" at screen centre
+   - Loads images via A1lib.imageDataFromUrl (native a1lib format,
+     same sRGB-free path used by @alt1/imagedata-loader)
+   - For first 10 scans: checks ALL 4 images and logs raw results
+     (no short-circuit) so we can see exactly which match and which
+     don't, regardless of prior results.
    ================================================================ */
 
 'use strict';
@@ -34,8 +29,6 @@
   var screen = null;  // captured ImgRef for current scan tick
 
   // ── Resolve the A1lib global ─────────────────────────────────────
-  // The UMD bundle at unpkg.com/alt1/dist/base/index.js exposes the
-  // library as window.A1lib (capital).  Some older builds use a1lib.
   function resolveLib() {
     if (lib) return lib;
     var candidate =
@@ -44,20 +37,33 @@
       null;
     if (candidate) {
       lib = candidate;
-      console.log('[VGT-haunt] capture lib resolved:', lib === A1lib ? 'A1lib' : 'a1lib');
     }
     return lib;
   }
 
-  // ── Load reference PNG without sRGB colour-space transformation ───
-  // colorSpaceConversion:'none' prevents Chromium from applying gamma
-  // correction, keeping pixel values identical to the raw PNG bytes.
+  // ── Load images via A1lib.imageDataFromUrl ────────────────────────
+  // imageDataFromUrl is a1lib's own loader — it strips sRGB and
+  // returns an ImageData in exactly the format findSubimage expects.
   function loadRef(name, path) {
+    var l = resolveLib();
+    if (l && typeof l.imageDataFromUrl === 'function') {
+      return l.imageDataFromUrl(path)
+        .then(function (imgData) {
+          refs[name] = imgData;
+          var d = imgData.data;
+          console.log('[VGT-haunt] Loaded "' + name + '" via imageDataFromUrl'
+                    + ' (' + imgData.width + 'x' + imgData.height + ')'
+                    + ' | px0 RGBA(' + d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + ')');
+        })
+        .catch(function (e) {
+          console.warn('[VGT-haunt] imageDataFromUrl failed "' + name + '":', e);
+          refs[name] = null;
+        });
+    }
+    // Fallback: fetch + canvas with colorSpaceConversion:none
     return fetch(path)
       .then(function (r) { return r.blob(); })
-      .then(function (blob) {
-        return createImageBitmap(blob, { colorSpaceConversion: 'none' });
-      })
+      .then(function (blob) { return createImageBitmap(blob, { colorSpaceConversion: 'none' }); })
       .then(function (bitmap) {
         var c = document.createElement('canvas');
         c.width  = bitmap.width;
@@ -65,11 +71,12 @@
         c.getContext('2d').drawImage(bitmap, 0, 0);
         refs[name] = c.getContext('2d').getImageData(0, 0, c.width, c.height);
         var d = refs[name].data;
-        console.log('[VGT-haunt] Loaded "' + name + '" (' + refs[name].width + 'x' + refs[name].height + ')'
+        console.log('[VGT-haunt] Loaded "' + name + '" via canvas fallback'
+                  + ' (' + refs[name].width + 'x' + refs[name].height + ')'
                   + ' | px0 RGBA(' + d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + ')');
       })
       .catch(function (e) {
-        console.warn('[VGT-haunt] Could not load:', path, e);
+        console.warn('[VGT-haunt] Could not load "' + name + '":', e);
         refs[name] = null;
       });
   }
@@ -88,24 +95,26 @@
   }
 
   // ── Search ────────────────────────────────────────────────────────
-  // ImgRef.findSubimage(needle: ImageData) → {x,y}[]
-  // A1lib.findSubimage(haystack: ImgRef, needle: ImageData) → {x,y}[]
-  function imageFound(name) {
-    if (!refs[name] || !screen) return false;
+  // Returns the raw hit array (may be empty) or null on error.
+  function queryImage(name) {
+    if (!refs[name] || !screen) return null;
     try {
-      var hits;
       if (typeof screen.findSubimage === 'function') {
-        hits = screen.findSubimage(refs[name]);
-      } else if (typeof lib.findSubimage === 'function') {
-        hits = lib.findSubimage(screen, refs[name]);
-      } else {
-        return false;
+        return screen.findSubimage(refs[name]);
       }
-      return Array.isArray(hits) && hits.length > 0;
+      if (typeof lib.findSubimage === 'function') {
+        return lib.findSubimage(screen, refs[name]);
+      }
+      return null;
     } catch (e) {
       console.warn('[VGT-haunt] findSubimage("' + name + '") error:', e);
-      return false;
+      return null;
     }
+  }
+
+  function imageFound(name) {
+    var hits = queryImage(name);
+    return Array.isArray(hits) && hits.length > 0;
   }
 
   // ── Overlay ───────────────────────────────────────────────────────
@@ -117,6 +126,8 @@
 
   // ── Scan ──────────────────────────────────────────────────────────
   var scanCount = 0;
+  var NAMES = ['zemouregal', 'vorkath', 'ghostTrigger', 'ghostHaunt'];
+
   function scan() {
     var tick = ++scanCount;
 
@@ -130,17 +141,27 @@
       return;
     }
 
-    // One-time: log what captureHoldFullRs returned so we can verify
-    if (tick === 1) {
-      console.log('[VGT-haunt] screen type:', typeof screen,
-                  '| keys:', Object.keys(screen || {}).join(', '));
+    // ── DEBUG MODE: first 10 scans — check ALL images, log raw results ──
+    if (tick <= 10) {
+      var results = {};
+      NAMES.forEach(function (n) {
+        var hits = queryImage(n);
+        results[n] = hits === null ? 'ERROR' :
+                     hits.length  ? 'FOUND(' + hits.length + ')' : '[]';
+      });
+      console.log('[VGT-haunt] tick#' + tick,
+        'zem=' + results['zemouregal'],
+        'vork=' + results['vorkath'],
+        'trig=' + results['ghostTrigger'],
+        'haunt=' + results['ghostHaunt']);
+      return; // Don't act during debug phase — just observe
     }
 
+    // ── Normal operation ──────────────────────────────────────────────
     if (tick % 10 === 1) {
       console.log('[VGT-haunt] Scan #' + tick + ' — RS ' + alt1.rsWidth + 'x' + alt1.rsHeight);
     }
 
-    // Short-circuit: require all three trigger images
     if (!imageFound('zemouregal'))   return;
     if (!imageFound('vorkath'))      return;
     if (!imageFound('ghostTrigger')) return;
@@ -157,29 +178,27 @@
 
   // ── Init ──────────────────────────────────────────────────────────
   function init() {
-    console.log('[VGT-haunt] Starting up (v1.7)...');
+    console.log('[VGT-haunt] Starting up (v1.8 — debug mode for first 10 scans)...');
 
-    // Log A1lib API surface once for diagnostics
-    if (typeof A1lib !== 'undefined') {
-      console.log('[VGT-haunt] A1lib keys:', Object.keys(A1lib).join(', '));
-    } else {
-      console.warn('[VGT-haunt] A1lib not found — will check a1lib at capture time');
+    var l = resolveLib();
+    if (!l) {
+      console.error('[VGT-haunt] A1lib / a1lib not available at init time.');
+      return;
     }
+    console.log('[VGT-haunt] lib resolved, imageDataFromUrl available:',
+                typeof l.imageDataFromUrl === 'function');
 
-    Promise.all([
-      loadRef('zemouregal',   './src/img/zemouregal.png'),
-      loadRef('vorkath',      './src/img/vorkath.png'),
-      loadRef('ghostTrigger', './src/img/ghost_trigger.png'),
-      loadRef('ghostHaunt',   './src/img/ghost_haunt.png'),
-    ]).then(function () {
-      var ok = Object.keys(refs).filter(function (n) { return refs[n] !== null; }).length;
-      console.log('[VGT-haunt] ' + ok + '/4 images loaded. Scanning every ' + SCAN_MS + 'ms.');
-
-      if (!resolveLib()) {
-        console.error('[VGT-haunt] No capture library available — A1lib / a1lib both missing.');
-        return;
-      }
-
+    Promise.all(NAMES.map(function (n) {
+      var paths = {
+        zemouregal:   './src/img/zemouregal.png',
+        vorkath:      './src/img/vorkath.png',
+        ghostTrigger: './src/img/ghost_trigger.png',
+        ghostHaunt:   './src/img/ghost_haunt.png',
+      };
+      return loadRef(n, paths[n]);
+    })).then(function () {
+      var ok = NAMES.filter(function (n) { return refs[n] !== null; }).length;
+      console.log('[VGT-haunt] ' + ok + '/4 images loaded. DEBUG for first 10 scans, then normal.');
       setInterval(scan, SCAN_MS);
     });
   }
