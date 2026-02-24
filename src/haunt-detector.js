@@ -150,7 +150,7 @@
     var ghostVisible = false;
     if (Date.now() - ghostFoundAt < GHOST_SKIP_MS) {
       ghostVisible = true;  // still within skip window
-    } else if (imageFound('ghostTrigger') || imageFound('ghostTrigger2') || imageFound('ghostTrigger3') || imageFound('ghostTrigger4') || imageFound('ghostTriggerBackup')) {
+    } else if (imageFound('ghostTrigger') || imageFound('ghostTrigger2') || imageFound('ghostTrigger3') || imageFound('ghostTrigger4') || imageFound('ghostTrigger5') || imageFound('ghostTriggerBackup')) {
       ghostVisible = true;
       ghostFoundAt = Date.now();
     }
@@ -169,7 +169,7 @@
       console.error('[VGT-haunt] A1lib not available.');
       return;
     }
-    var ghostRefs = ['ghostTrigger', 'ghostTrigger2', 'ghostTrigger3', 'ghostTrigger4', 'ghostTriggerBackup'];
+    var ghostRefs = ['ghostTrigger', 'ghostTrigger2', 'ghostTrigger3', 'ghostTrigger4', 'ghostTrigger5', 'ghostTriggerBackup'];
     Promise.all([
       loadRef('vorkath',             './src/img/vorkath.png'),
       loadRef('zemouregal',          './src/img/zemouregal.png'),
@@ -177,6 +177,7 @@
       loadRef('ghostTrigger2',       './src/img/ghost_trigger2.png'),
       loadRef('ghostTrigger3',       './src/img/ghost_trigger3.png'),
       loadRef('ghostTrigger4',       './src/img/ghost_trigger4.png'),
+      loadRef('ghostTrigger5',       './src/img/ghost_trigger5.png'),
       loadRef('ghostTriggerBackup',  './src/img/ghost_trigger_backup.png'),
     ]).then(function () {
       var allRefs = ['vorkath', 'zemouregal'].concat(ghostRefs);
