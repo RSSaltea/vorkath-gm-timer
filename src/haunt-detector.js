@@ -17,7 +17,7 @@
   if (typeof alt1 === 'undefined') return;
 
   // ── Config ──────────────────────────────────────────────────────
-  var SCAN_MS    = 2000;
+  var SCAN_MS    = 2400;   // 4 RS ticks (4 × 600 ms)
   var OVERLAY_MS = 2500;
 
   var OVERLAY_TEXT  = 'Command Ghost for Haunt';
