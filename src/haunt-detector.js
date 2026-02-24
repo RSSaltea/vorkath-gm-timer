@@ -139,6 +139,9 @@
 
     var encounterActive = imageFound('vorkath') || imageFound('zemouregal');
 
+    // Expose for chat-reader.js so MOVE SOUTH only triggers mid-encounter.
+    window.VGT_encounterActive = encounterActive;
+
     if (encounterActive && !imageFound('ghostTrigger')) {
       startFlashing();
     } else {
