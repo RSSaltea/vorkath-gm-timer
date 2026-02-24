@@ -586,14 +586,22 @@ body.nis {
 .vgt-info-stats {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  justify-content: space-between;
 }
 
 .vgt-info-stat {
+  flex: 1;
   font-size: 11px;
   color: #9aa0a6;
   white-space: nowrap;
+}
+
+.vgt-info-stat:first-child {
+  text-align: left;
+}
+
+.vgt-info-stat:last-child {
+  text-align: right;
 }
 
 .vgt-info-fc-name {
