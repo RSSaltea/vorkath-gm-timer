@@ -10,10 +10,10 @@
 // ── Config ────────────────────────────────────────────────────────
 const SHEET_ID    = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
 const SHEET_NAME  = 'List';
-const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
+const REFRESH_MS  = 5_000;    // auto-refresh interval (5 s)
 
 const GAS_URL = 'https://script.google.com/macros/s/' +
-                'AKfycbz0DwSXtXAqhAqbKNn83_omaF4Ke3tnzabEijNIOC91phn_9zoEOsifh643jBXjnUzM7Q' +
+                'AKfycbyT7Eb1Eunmrfh6aILvLx5szMpIdz0zB1f_FQR3Frz_HYXfD4dv_KAXjT3AkTqdzhD1Sg' +
                 '/exec';
 
 const HEARTBEAT_MS         = 15_000;  // send heartbeat every 15 s
@@ -196,7 +196,25 @@ function setCard(el, state) {
 
 // ── Queue tab ─────────────────────────────────────────────────────
 
+function updateToggleOpenBtn() {
+  var btn = document.getElementById('toggle-open-btn');
+  if (!btn) return;
+  if (calibrated) {
+    btn.style.display = '';
+    if (submissionsOpen) {
+      btn.innerHTML = 'Currently:<br>Open';
+      btn.classList.add('open');
+    } else {
+      btn.innerHTML = 'Currently:<br>Closed';
+      btn.classList.remove('open');
+    }
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
 function updateQueueList(queue) {
+  updateToggleOpenBtn();
   var listEl = document.getElementById('queue-list');
 
   if (!queue) {
@@ -338,6 +356,27 @@ async function fetchWorld() {
   }
 }
 
+// ── Stats (Total / Today) ────────────────────────────────────────
+
+async function fetchStats() {
+  try {
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+              '/gviz/tq?tqx=out:csv&sheet=Responses&range=D2:E2';
+    var resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var text = await resp.text();
+    var parts = text.replace(/"/g, '').split(',');
+    var today = (parts[0] || '').trim();
+    var total = (parts[1] || '').trim();
+    var elTotal = document.getElementById('info-total');
+    var elToday = document.getElementById('info-today');
+    if (elTotal) elTotal.textContent = 'Total: ' + (total || '—');
+    if (elToday) elToday.textContent = 'Today: ' + (today || '—');
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch stats:', err);
+  }
+}
+
 // ── Config seed ──────────────────────────────────────────────────
 
 async function fetchConfigSeed() {
@@ -468,7 +507,7 @@ function isOnline(name) {
 async function refresh() {
   setDot('loading');
 
-  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings()]);
+  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats()]);
   var queue   = results[0];
 
   if (queue) {
@@ -645,6 +684,22 @@ function init() {
     if (action && name) {
       runAction(action, name, btn);
     }
+  });
+
+  // ── Toggle open/closed button ─────────────────────────────────
+  document.getElementById('toggle-open-btn').addEventListener('click', async function() {
+    if (!calibrated) return;
+    var btn = this;
+    var newValue = !submissionsOpen;
+    btn.disabled = true;
+    try {
+      await fetch(GAS_URL + '?action=toggleOpen&value=' + newValue, { mode: 'no-cors' });
+      submissionsOpen = newValue;
+      updateToggleOpenBtn();
+    } catch (err) {
+      console.warn('[VGT] Failed to toggle open:', err);
+    }
+    btn.disabled = false;
   });
 }
 

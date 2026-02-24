@@ -80,6 +80,7 @@
 
       <div class="vgt-queue-header">
         <div class="vgt-label">Current Queue</div>
+        <button class="vgt-toggle-open-btn" id="toggle-open-btn" style="display:none;">Currently:<br>Closed</button>
         <button class="vgt-refresh-btn" id="refresh-btn-queue">↻ Refresh</button>
       </div>
 
@@ -93,7 +94,11 @@
     <div class="vgt-page" id="tab-info">
 
       <div class="vgt-info-hero">
-        <div class="vgt-info-fc-name">VorkathFC</div>
+        <div class="vgt-info-stats">
+          <span class="vgt-info-stat" id="info-total">Total: —</span>
+          <div class="vgt-info-fc-name">VorkathFC</div>
+          <span class="vgt-info-stat" id="info-today">Today: —</span>
+        </div>
         <label class="vgt-reminder-toggle">
           <span class="vgt-reminder-label">Reminder Toggle</span>
           <input type="checkbox" id="reminder-toggle" checked />
