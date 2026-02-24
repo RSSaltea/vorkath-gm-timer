@@ -1,14 +1,12 @@
 /* ================================================================
-   Vorkath GM Timer — chat-reader.js  v2.4
+   Vorkath GM Timer — chat-reader.js  v2.5
    ================================================================
-   reader.find() does not auto-detect in our UMD context.
-   After 3 failed find() attempts we manually set reader.pos to
-   the standard RS3 chatbox coordinates (bottom-left of RS window).
-   reader.read() uses reader.pos.mainbox.rect to know where to OCR.
+   Mirrors the chatbox initialisation from the working Amascut
+   Helper plugin (same CDN URLs, same mixColor colour setup,
+   same find-poll → read-poll flow).
 
-   v2.4 fix: preserve readargs.font from the Chatbox constructor.
-   Replacing readargs entirely stripped the font, causing OCR to
-   return 0 segments even with a valid pos.
+   When "south" or "move" appears in any chat segment the overlay
+   "MOVE SOUTH" flashes red for 10 s then auto-stops.
    ================================================================ */
 
 'use strict';
@@ -17,7 +15,11 @@
 
   if (typeof alt1 === 'undefined') return;
 
-  var SCAN_MS      = 500;
+  // ── Config ──────────────────────────────────────────────────────
+  var FIND_POLL_MS = 800;    // how often to retry reader.find()
+  var READ_POLL_MS = 500;    // how often to call reader.read() once found
+  var EMPTY_LIMIT  = 4;      // re-find after this many consecutive empty reads
+
   var FLASH_INT_MS = 1000;
   var FLASH_ON_MS  = 700;
   var FLASH_TOTAL  = 10000;
@@ -26,10 +28,13 @@
   var OVERLAY_SIZE  = 32;
   var OVERLAY_COLOR = (255 * 16777216 + 255 * 65536 + 0 * 256 + 0) | 0;
 
+  // ── State ────────────────────────────────────────────────────────
   var flashTimer  = null;
   var stopTimer   = null;
   var lastTrigger = 0;
+  var emptyCount  = 0;
 
+  // ── Overlay ──────────────────────────────────────────────────────
   function showOverlay() {
     var cx = alt1.rsX + Math.floor(alt1.rsWidth  / 2) - 140;
     var cy = alt1.rsY + Math.floor(alt1.rsHeight / 2) - 55;
@@ -63,150 +68,99 @@
     return low.indexOf('south') !== -1 || low.indexOf('move') !== -1;
   }
 
-  // ── Manual chatbox position ───────────────────────────────────────
-  // RS3 default interface: chatbox sits in the bottom-left corner.
-  // These proportions match the default layout at any resolution.
-  function buildManualPos() {
-    var w = Math.min(516, Math.floor(alt1.rsWidth * 0.27));
-    var h = 130;
-    var x = 7;
-    var y = alt1.rsHeight - 148;
-    return {
-      mainbox: { rect: { x: x, y: y, width: w, height: h } }
-    };
-  }
-
+  // ── Chatbox reader ───────────────────────────────────────────────
   function initWithChatbox() {
+    var A1 = window.a1lib || window.A1lib || null;
+    if (!A1 || typeof A1.mixColor !== 'function') {
+      console.error('[VGT-chat] A1lib not available — chat reader disabled.');
+      return;
+    }
+
     var reader = new Chatbox.default();
 
-    // Preserve the font the constructor loaded; only update colors/direction.
-    // Replacing readargs entirely strips readargs.font → OCR finds nothing.
-    var initFont = reader.readargs && reader.readargs.font;
+    // Build colours with mixColor exactly as Amascut does.
+    // Covers public (white), action/name (blue), CC names (teal), FC (cyan).
     reader.readargs = {
-      font:      initFont || Chatbox.chatfonts,
-      colors:    Chatbox.defaultcolors || [],
+      colors: [
+        A1.mixColor(255, 255, 255),   // white  — public chat text
+        A1.mixColor(127, 169, 255),   // blue   — public chat names / actions
+        A1.mixColor(69,  131, 145),   // teal   — CC player name
+        A1.mixColor(0,   255, 255),   // cyan   — FC text
+        A1.mixColor(255, 140,   0),   // orange — game messages
+      ],
       backwards: true,
     };
 
-    console.log('[VGT-chat] reader created | defaultcolors:', (Chatbox.defaultcolors || []).length,
-                '| font:', (initFont || Chatbox.chatfonts) ? 'set' : 'MISSING');
+    console.log('[VGT-chat] reader created (v2.5)');
 
-    var findAttempts = 0;
-    var scanCount    = 0;
-    var posSource    = 'none';  // 'find' or 'manual'
+    var readInterval = null;
 
-    function tryFind() {
-      try {
-        reader.find();
-      } catch (e) {
-        console.warn('[VGT-chat] reader.find() threw:', e && e.message ? e.message : e);
-      }
-
-      if (reader.pos) {
-        posSource = 'find';
-        console.log('[VGT-chat] Chatbox found via reader.find():', JSON.stringify(reader.pos));
-      } else if (findAttempts >= 3) {
-        // Auto-detect gave up — fall back to manual position
-        reader.pos = buildManualPos();
-        posSource = 'manual';
-        console.log('[VGT-chat] reader.find() failed ' + findAttempts + ' times.'
-                  + ' Using manual pos:', JSON.stringify(reader.pos));
-      }
+    function startReading() {
+      if (readInterval) return;
+      console.log('[VGT-chat] Chatbox found — starting read loop');
+      readInterval = setInterval(readChat, READ_POLL_MS);
     }
 
     function readChat() {
-      scanCount++;
       if (!alt1.rsLinked) return;
+      var segs = [];
+      try {
+        segs = reader.read() || [];
+      } catch (e) {
+        console.warn('[VGT-chat] read() error:', e && e.message ? e.message : e);
+        segs = [];
+      }
 
-      // Keep trying to find (or use manual) until we have a pos
-      if (!reader.pos) {
-        findAttempts++;
-        tryFind();
+      if (!segs.length) {
+        emptyCount++;
+        if (emptyCount >= EMPTY_LIMIT) {
+          console.log('[VGT-chat] ' + EMPTY_LIMIT + ' empty reads — re-running find()');
+          emptyCount = 0;
+          try { reader.pos = null; reader.find(); } catch (e) {}
+          if (!reader.pos) {
+            console.warn('[VGT-chat] re-find failed, will keep retrying');
+          } else {
+            console.log('[VGT-chat] re-find succeeded:', JSON.stringify(reader.pos));
+          }
+        }
         return;
       }
 
-      try {
-        var segs = reader.read() || [];
+      emptyCount = 0;
 
-        if (segs.length === 0) {
-          if (scanCount % 20 === 1) {
-            console.log('[VGT-chat] tick#' + scanCount + ': 0 segments (pos src: ' + posSource + ')');
-          }
-          // If manual pos keeps giving 0 segments, log a hint
-          if (posSource === 'manual' && scanCount % 60 === 1) {
-            var p = reader.pos.mainbox.rect;
-            console.log('[VGT-chat] manual rect: x=' + p.x + ' y=' + p.y
-                      + ' w=' + p.width + ' h=' + p.height
-                      + ' | rsH=' + alt1.rsHeight + ' rsW=' + alt1.rsWidth);
-          }
-        } else {
-          if (scanCount <= 30 || scanCount % 10 === 1) {
-            var preview = segs.slice(0, 4).map(function (s) {
-              return JSON.stringify((s.text || '').slice(0, 50));
-            }).join(', ');
-            console.log('[VGT-chat] tick#' + scanCount + ' [' + posSource + ']:'
-                      + ' ' + segs.length + ' segs → ' + preview);
-          }
-
-          for (var i = 0; i < segs.length; i++) {
-            var text = (segs[i] && segs[i].text) || '';
-            if (containsKeyword(text)) {
-              console.log('[VGT-chat] KEYWORD in seg[' + i + ']: ' + JSON.stringify(text));
-              triggerMoveSouth();
-              break;
-            }
-          }
+      for (var i = 0; i < segs.length; i++) {
+        var text = (segs[i] && segs[i].text) || '';
+        if (containsKeyword(text)) {
+          console.log('[VGT-chat] KEYWORD in seg[' + i + ']: ' + JSON.stringify(text));
+          triggerMoveSouth();
+          break;
         }
-      } catch (e) {
-        console.warn('[VGT-chat] read() error:', e && e.message ? e.message : e);
-        // Reset so we rebuild pos on next tick
-        reader.pos = null;
-        posSource = 'none';
-        findAttempts = 0;
       }
     }
 
-    setInterval(readChat, SCAN_MS);
-
-    // Re-find every 10 s in case chatbox moves
-    setInterval(function () {
-      if (posSource === 'find') {
-        try { reader.find(); } catch(e) {}
-        if (!reader.pos) {
-          reader.pos = buildManualPos();
-          posSource = 'manual';
-        }
-      }
-    }, 10000);
-
-    console.log('[VGT-chat] Chatbox reader started (v2.3)');
-  }
-
-  // ── Fallback: bindReadStringEx ────────────────────────────────────
-  function initWithBindRead() {
-    console.log('[VGT-chat] FALLBACK: using bindReadStringEx');
-    var scanCount = 0;
-    function scan() {
-      var tick = ++scanCount;
+    // Poll find() every FIND_POLL_MS until chatbox is located, then switch to reading.
+    var finder = setInterval(function () {
       if (!alt1.rsLinked) return;
       try {
-        var handle = alt1.bindRegion(0, 0, alt1.rsWidth, alt1.rsHeight);
-        if (handle <= 0) return;
-        var chatY = alt1.rsHeight - 148;
-        var text = (typeof alt1.bindReadStringEx === 'function'
-          ? alt1.bindReadStringEx(handle, 7, chatY, 516, 130)
-          : alt1.bindReadString(handle, 7, chatY, 516, 130)) || '';
-        if (tick <= 10 || tick % 40 === 1) {
-          console.log('[VGT-chat] fallback#' + tick + ':', JSON.stringify(text.slice(0, 100)));
+        if (!reader.pos) {
+          reader.find();
         }
-        if (containsKeyword(text)) triggerMoveSouth();
-      } catch (e) { console.warn('[VGT-chat] fallback error:', e); }
-    }
-    setInterval(scan, SCAN_MS);
+        if (reader.pos && reader.pos.mainbox && reader.pos.mainbox.rect) {
+          clearInterval(finder);
+          console.log('[VGT-chat] Chatbox pos:', JSON.stringify(reader.pos));
+          startReading();
+        }
+      } catch (e) {
+        console.warn('[VGT-chat] find() error:', e && e.message ? e.message : e);
+      }
+    }, FIND_POLL_MS);
+
+    console.log('[VGT-chat] Polling for chatbox every ' + FIND_POLL_MS + ' ms...');
   }
 
+  // ── Init ─────────────────────────────────────────────────────────
   function init() {
-    console.log('[VGT-chat] Starting up (v2.3)...');
+    console.log('[VGT-chat] Starting up (v2.5)...');
     if (typeof Chatbox !== 'undefined' && Chatbox && Chatbox.default) {
       initWithChatbox();
     } else {
@@ -218,7 +172,7 @@
           initWithChatbox();
         } else if (waited >= 3000) {
           clearInterval(check);
-          initWithBindRead();
+          console.error('[VGT-chat] Chatbox library not available after 3 s — chat reader disabled.');
         }
       }, 200);
     }
