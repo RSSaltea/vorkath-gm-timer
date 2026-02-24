@@ -548,11 +548,55 @@ body.nis {
   text-shadow: 0 1px 8px rgba(74,158,255,0.35);
 }
 
-.vgt-info-tagline {
+/* ── Reminder Toggle ────────────────────────────────────────────── */
+.vgt-reminder-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vgt-reminder-label {
   font-size: 11px;
   color: var(--text-muted);
-  margin-top: 4px;
   letter-spacing: 0.4px;
+}
+
+.vgt-reminder-toggle input {
+  display: none;
+}
+
+.vgt-toggle-track {
+  position: relative;
+  width: 32px;
+  height: 16px;
+  background: var(--border);
+  border-radius: 8px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.vgt-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.vgt-reminder-toggle input:checked + .vgt-toggle-track {
+  background: var(--accent-dim);
+}
+
+.vgt-reminder-toggle input:checked + .vgt-toggle-track .vgt-toggle-thumb {
+  transform: translateX(16px);
+  background: var(--accent);
 }
 
 .vgt-info-card {

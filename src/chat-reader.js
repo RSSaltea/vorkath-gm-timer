@@ -65,6 +65,7 @@
   }
 
   function triggerMoveSouth() {
+    if (window.VGT_remindersEnabled === false) return;  // toggle is off
     if (!window.VGT_encounterActive) return;   // only active during encounter
     var now = Date.now();
     if (now - lastTrigger < FLASH_TOTAL) return;

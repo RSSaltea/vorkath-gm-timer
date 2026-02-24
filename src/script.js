@@ -348,6 +348,18 @@ function init() {
     }
   } catch (e) {}
 
+  // ── Reminder toggle
+  var reminderToggle = document.getElementById('reminder-toggle');
+  var savedReminder = localStorage.getItem('vgt_remindersEnabled');
+  if (savedReminder !== null) {
+    reminderToggle.checked = savedReminder === 'true';
+  }
+  window.VGT_remindersEnabled = reminderToggle.checked;
+  reminderToggle.addEventListener('change', function() {
+    window.VGT_remindersEnabled = this.checked;
+    localStorage.setItem('vgt_remindersEnabled', this.checked);
+  });
+
   // ── Tab switching
   document.querySelectorAll('.vgt-tab').forEach(function(tab) {
     tab.addEventListener('click', function() {

@@ -142,7 +142,7 @@
     // Expose for chat-reader.js so MOVE SOUTH only triggers mid-encounter.
     window.VGT_encounterActive = encounterActive;
 
-    if (encounterActive && !imageFound('ghostTrigger')) {
+    if (window.VGT_remindersEnabled !== false && encounterActive && !imageFound('ghostTrigger')) {
       startFlashing();
     } else {
       stopFlashing();
