@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vorkath GM — Completed</title>
+  <style>
+    @font-face {
+      font-family: 'rs-pro-3';
+      src: url(src/css/style.css) format('truetype');
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0a0e;
+      color: #dde1e7;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.4;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 420px;
+      margin: 24px auto;
+      background: #0f0f14;
+      border: 1px solid #26263a;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #26263a;
+      margin-bottom: 12px;
+    }
+    .title {
+      font-size: 17px;
+      font-weight: 600;
+      color: #e6dcd0;
+    }
+    .count {
+      font-size: 12px;
+      color: #6e7380;
+    }
+    .search-wrap {
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .search-input {
+      width: 100%;
+      padding: 8px 12px;
+      background: #16161f;
+      border: 1px solid #26263a;
+      border-radius: 5px;
+      color: #dde1e7;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: #4a9eff;
+    }
+    .search-input::placeholder {
+      color: #6e7380;
+    }
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-height: calc(100vh - 180px);
+      overflow-y: auto;
+    }
+    .list::-webkit-scrollbar { width: 6px; }
+    .list::-webkit-scrollbar-track { background: transparent; }
+    .list::-webkit-scrollbar-thumb { background: #26263a; border-radius: 3px; }
+    .item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: #16161f;
+      border-radius: 5px;
+      font-size: 13px;
+    }
+    .item-num {
+      color: #6e7380;
+      font-size: 11px;
+      min-width: 28px;
+    }
+    .item-name {
+      color: #dde1e7;
+    }
+    .loading {
+      text-align: center;
+      color: #6e7380;
+      padding: 20px;
+    }
+    .no-results {
+      text-align: center;
+      color: #6e7380;
+      padding: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">Completed Kills</div>
+      <div class="count" id="count"></div>
+    </div>
+    <div class="search-wrap">
+      <input class="search-input" id="search" type="text" placeholder="Search names..." autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="list" id="list">
+      <div class="loading">Loading completed list...</div>
+    </div>
+  </div>
+  <script>
+    var SHEET_ID = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
+    var completedData = [];
+
+    async function fetchCompleted() {
+      try {
+        var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+                  "/gviz/tq?tqx=out:csv&sheet=Responses&tq=" +
+                  encodeURIComponent("SELECT B WHERE C='done'");
+        var resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var text = await resp.text();
+        var lines = text.split('\n');
+        var names = [];
+        for (var i = 0; i < lines.length; i++) {
+          var name = lines[i].replace(/^"|"$/g, '').trim();
+          if (name && name.toLowerCase() !== 'your runescape name?') names.push(name);
+        }
+        completedData = names;
+        document.getElementById('count').textContent = names.length + ' players';
+        renderList('');
+      } catch (err) {
+        document.getElementById('list').innerHTML = '<div class="loading">Failed to load.</div>';
+      }
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function renderList(filter) {
+      var listEl = document.getElementById('list');
+      var filtered = completedData;
+      if (filter) {
+        var f = filter.toLowerCase();
+        filtered = completedData.filter(function(n) { return n.toLowerCase().indexOf(f) !== -1; });
+      }
+      if (filtered.length === 0) {
+        listEl.innerHTML = '<div class="no-results">No results</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < filtered.length; i++) {
+        html += '<div class="item"><span class="item-num">' + (i + 1) + '.</span><span class="item-name">' + escapeHtml(filtered[i]) + '</span></div>';
+      }
+      listEl.innerHTML = html;
+    }
+
+    document.getElementById('search').addEventListener('input', function() {
+      renderList(this.value.trim());
+    });
+
+    fetchCompleted();
+  </script>
+</body>
+</html>
