@@ -433,13 +433,16 @@ function init() {
 
   // ── Name input: update display immediately; refresh queue 1s after typing stops
   var nameDebounce = null;
+  var heartbeatDebounce = null;
   document.getElementById('name-override').addEventListener('input', function() {
     try { localStorage.setItem('vgt_playerName', this.value.trim()); } catch (e) {}
     updateStatus(queueData);
     updateQueueList(queueData);
     clearTimeout(nameDebounce);
     nameDebounce = setTimeout(refresh, 1000);
-    sendHeartbeat();
+    // Debounce heartbeat — wait 5 s after last keystroke before sending
+    clearTimeout(heartbeatDebounce);
+    heartbeatDebounce = setTimeout(sendHeartbeat, 5000);
   });
 
   // ── Join Queue button
