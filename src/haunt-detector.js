@@ -1,11 +1,12 @@
 /* ================================================================
-   Vorkath GM Timer — haunt-detector.js  v1.8
+   Vorkath GM Timer — haunt-detector.js  v1.9
    ================================================================
-   - Loads images via A1lib.imageDataFromUrl (native a1lib format,
-     same sRGB-free path used by @alt1/imagedata-loader)
-   - For first 10 scans: checks ALL 4 images and logs raw results
-     (no short-circuit) so we can see exactly which match and which
-     don't, regardless of prior results.
+   Logic (runs every 4 ticks / 2400 ms):
+     1. If vorkath.png OR zemouregal.png is found  → encounter active
+     2. If encounter active AND ghost_trigger.png NOT found
+        → flash red "Command Ghost for Haunt!" at screen centre
+     3. As soon as BOTH disappear (encounter over) OR ghost_trigger
+        is found → stop calling overLayText; overlay expires in 2500 ms
    ================================================================ */
 
 'use strict';
@@ -16,64 +17,52 @@
 
   // ── Config ──────────────────────────────────────────────────────
   var SCAN_MS    = 2400;   // 4 RS ticks (4 × 600 ms)
-  var OVERLAY_MS = 2500;
+  var OVERLAY_MS = 2500;   // slightly longer than scan interval
 
-  var OVERLAY_TEXT  = 'Command Ghost for Haunt';
+  var OVERLAY_TEXT  = 'Command Ghost for Haunt!';
   var OVERLAY_SIZE  = 28;
-  // ARGB orange: A=255, R=255, G=165, B=0
-  var OVERLAY_COLOR = (255 * 16777216 + 255 * 65536 + 165 * 256 + 0) | 0;
+  // ARGB red: A=255, R=255, G=0, B=0  →  0xFFFF0000
+  var OVERLAY_COLOR = (255 * 16777216 + 255 * 65536 + 0 * 256 + 0) | 0;
 
   // ── State ────────────────────────────────────────────────────────
-  var refs   = {};    // { name: ImageData }
-  var lib    = null;  // resolved A1lib reference
-  var screen = null;  // captured ImgRef for current scan tick
+  var refs   = {};
+  var lib    = null;
+  var screen = null;
 
-  // ── Resolve the A1lib global ─────────────────────────────────────
+  // ── Resolve A1lib ────────────────────────────────────────────────
   function resolveLib() {
     if (lib) return lib;
     var candidate =
       (typeof A1lib !== 'undefined' && A1lib && A1lib.captureHoldFullRs && A1lib) ||
       (typeof a1lib !== 'undefined' && a1lib && a1lib.captureHoldFullRs && a1lib) ||
       null;
-    if (candidate) {
-      lib = candidate;
-    }
+    if (candidate) lib = candidate;
     return lib;
   }
 
-  // ── Load images via A1lib.imageDataFromUrl ────────────────────────
-  // imageDataFromUrl is a1lib's own loader — it strips sRGB and
-  // returns an ImageData in exactly the format findSubimage expects.
+  // ── Load image ────────────────────────────────────────────────────
   function loadRef(name, path) {
     var l = resolveLib();
     if (l && typeof l.imageDataFromUrl === 'function') {
       return l.imageDataFromUrl(path)
         .then(function (imgData) {
           refs[name] = imgData;
-          var d = imgData.data;
-          console.log('[VGT-haunt] Loaded "' + name + '" via imageDataFromUrl'
-                    + ' (' + imgData.width + 'x' + imgData.height + ')'
-                    + ' | px0 RGBA(' + d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + ')');
+          console.log('[VGT-haunt] Loaded "' + name + '" (' + imgData.width + 'x' + imgData.height + ')');
         })
         .catch(function (e) {
-          console.warn('[VGT-haunt] imageDataFromUrl failed "' + name + '":', e);
+          console.warn('[VGT-haunt] Failed to load "' + name + '":', e);
           refs[name] = null;
         });
     }
-    // Fallback: fetch + canvas with colorSpaceConversion:none
     return fetch(path)
       .then(function (r) { return r.blob(); })
       .then(function (blob) { return createImageBitmap(blob, { colorSpaceConversion: 'none' }); })
       .then(function (bitmap) {
         var c = document.createElement('canvas');
-        c.width  = bitmap.width;
-        c.height = bitmap.height;
+        c.width = bitmap.width; c.height = bitmap.height;
         c.getContext('2d').drawImage(bitmap, 0, 0);
         refs[name] = c.getContext('2d').getImageData(0, 0, c.width, c.height);
-        var d = refs[name].data;
-        console.log('[VGT-haunt] Loaded "' + name + '" via canvas fallback'
-                  + ' (' + refs[name].width + 'x' + refs[name].height + ')'
-                  + ' | px0 RGBA(' + d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + ')');
+        console.log('[VGT-haunt] Loaded "' + name + '" via canvas fallback');
       })
       .catch(function (e) {
         console.warn('[VGT-haunt] Could not load "' + name + '":', e);
@@ -83,38 +72,25 @@
 
   // ── Capture ───────────────────────────────────────────────────────
   function captureScreen() {
-    var l = resolveLib();
-    if (!l) return false;
     try {
-      screen = l.captureHoldFullRs();
+      screen = lib.captureHoldFullRs();
       return screen != null;
     } catch (e) {
-      console.warn('[VGT-haunt] captureHoldFullRs error:', e);
       return false;
     }
   }
 
   // ── Search ────────────────────────────────────────────────────────
-  // Returns the raw hit array (may be empty) or null on error.
-  function queryImage(name) {
-    if (!refs[name] || !screen) return null;
-    try {
-      if (typeof screen.findSubimage === 'function') {
-        return screen.findSubimage(refs[name]);
-      }
-      if (typeof lib.findSubimage === 'function') {
-        return lib.findSubimage(screen, refs[name]);
-      }
-      return null;
-    } catch (e) {
-      console.warn('[VGT-haunt] findSubimage("' + name + '") error:', e);
-      return null;
-    }
-  }
-
   function imageFound(name) {
-    var hits = queryImage(name);
-    return Array.isArray(hits) && hits.length > 0;
+    if (!refs[name] || !screen) return false;
+    try {
+      var hits = typeof screen.findSubimage === 'function'
+        ? screen.findSubimage(refs[name])
+        : lib.findSubimage(screen, refs[name]);
+      return Array.isArray(hits) && hits.length > 0;
+    } catch (e) {
+      return false;
+    }
   }
 
   // ── Overlay ───────────────────────────────────────────────────────
@@ -126,79 +102,44 @@
 
   // ── Scan ──────────────────────────────────────────────────────────
   var scanCount = 0;
-  var NAMES = ['zemouregal', 'vorkath', 'ghostTrigger', 'ghostHaunt'];
-
   function scan() {
     var tick = ++scanCount;
 
-    if (!alt1.rsLinked) {
-      if (tick % 5 === 1) console.log('[VGT-haunt] RS not linked');
-      return;
-    }
+    if (!alt1.rsLinked) return;
+    if (!captureScreen()) return;
 
-    if (!captureScreen()) {
-      if (tick % 5 === 1) console.log('[VGT-haunt] captureScreen failed');
-      return;
-    }
-
-    // ── DEBUG MODE: first 10 scans — check ALL images, log raw results ──
-    if (tick <= 10) {
-      var results = {};
-      NAMES.forEach(function (n) {
-        var hits = queryImage(n);
-        results[n] = hits === null ? 'ERROR' :
-                     hits.length  ? 'FOUND(' + hits.length + ')' : '[]';
-      });
-      console.log('[VGT-haunt] tick#' + tick,
-        'zem=' + results['zemouregal'],
-        'vork=' + results['vorkath'],
-        'trig=' + results['ghostTrigger'],
-        'haunt=' + results['ghostHaunt']);
-      return; // Don't act during debug phase — just observe
-    }
-
-    // ── Normal operation ──────────────────────────────────────────────
     if (tick % 10 === 1) {
-      console.log('[VGT-haunt] Scan #' + tick + ' — RS ' + alt1.rsWidth + 'x' + alt1.rsHeight);
+      console.log('[VGT-haunt] Scan #' + tick);
     }
 
-    if (!imageFound('zemouregal'))   return;
-    if (!imageFound('vorkath'))      return;
-    if (!imageFound('ghostTrigger')) return;
+    // Step 1: encounter active if Vorkath OR Zemouregal is visible
+    var encounterActive = imageFound('vorkath') || imageFound('zemouregal');
+    if (!encounterActive) return;
 
-    console.log('[VGT-haunt] Encounter detected!');
-
-    if (!imageFound('ghostHaunt')) {
-      console.log('[VGT-haunt] Ghost haunt MISSING — showing overlay');
+    // Step 2: ghost trigger missing → remind player
+    if (!imageFound('ghostTrigger')) {
       showReminder();
-    } else {
-      if (tick % 5 === 0) console.log('[VGT-haunt] Ghost haunt present — OK');
     }
+    // If ghostTrigger IS found, do nothing — let the overlay expire
   }
 
   // ── Init ──────────────────────────────────────────────────────────
   function init() {
-    console.log('[VGT-haunt] Starting up (v1.8 — debug mode for first 10 scans)...');
+    console.log('[VGT-haunt] Starting up (v1.9)...');
 
-    var l = resolveLib();
-    if (!l) {
-      console.error('[VGT-haunt] A1lib / a1lib not available at init time.');
+    if (!resolveLib()) {
+      console.error('[VGT-haunt] A1lib not available.');
       return;
     }
-    console.log('[VGT-haunt] lib resolved, imageDataFromUrl available:',
-                typeof l.imageDataFromUrl === 'function');
 
-    Promise.all(NAMES.map(function (n) {
-      var paths = {
-        zemouregal:   './src/img/zemouregal.png',
-        vorkath:      './src/img/vorkath.png',
-        ghostTrigger: './src/img/ghost_trigger.png',
-        ghostHaunt:   './src/img/ghost_haunt.png',
-      };
-      return loadRef(n, paths[n]);
-    })).then(function () {
-      var ok = NAMES.filter(function (n) { return refs[n] !== null; }).length;
-      console.log('[VGT-haunt] ' + ok + '/4 images loaded. DEBUG for first 10 scans, then normal.');
+    Promise.all([
+      loadRef('vorkath',      './src/img/vorkath.png'),
+      loadRef('zemouregal',   './src/img/zemouregal.png'),
+      loadRef('ghostTrigger', './src/img/ghost_trigger.png'),
+    ]).then(function () {
+      var loaded = ['vorkath', 'zemouregal', 'ghostTrigger']
+                    .filter(function (n) { return refs[n] !== null; }).length;
+      console.log('[VGT-haunt] ' + loaded + '/3 images loaded. Scanning every ' + SCAN_MS + 'ms.');
       setInterval(scan, SCAN_MS);
     });
   }
