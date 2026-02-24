@@ -1,158 +1,135 @@
 /* ================================================================
-   Vorkath GM Timer — haunt-detector.js
+   Vorkath GM Timer — haunt-detector.js  v1.2
    ================================================================
-   Polls the RS screen every 2 s.
-   If all three encounter images (Zemouregal, Vorkath, ghost icon)
-   are visible but the purple Haunt ghost is absent, flashes an
-   overlay reminder in the centre of the screen.
+   Uses a1lib.captureHoldFullRs() + a1lib.findSubimage() — the same
+   API used by AFKWarden and other RuneApps plugins.
+
+   Scans the full RS screen every 2 s.
+   Trigger:   zemouregal + vorkath + ghost_trigger all visible
+   Condition: ghost_haunt NOT visible
+   Action:    flash "Command Ghost for Haunt" at screen centre
    ================================================================ */
 
 'use strict';
 
 (function () {
 
-  // Only meaningful inside Alt1
   if (typeof alt1 === 'undefined') return;
 
   // ── Config ──────────────────────────────────────────────────────
-  var SCAN_MS    = 2000;   // scan interval (ms)
-  var OVERLAY_MS = 2500;   // how long each text flash lasts (ms)
-  var TOLERANCE  = 25;     // per-channel colour tolerance (0–255)
-  var MAX_KP     = 30;     // max keypoints sampled from each reference
+  var SCAN_MS    = 2000;
+  var OVERLAY_MS = 2500;
 
   var OVERLAY_TEXT  = 'Command Ghost for Haunt';
   var OVERLAY_SIZE  = 28;
-
-  // ARGB orange-yellow: A=255 R=255 G=165 B=0
-  // Built without the signed-int trap: use float arithmetic then |0
+  // ARGB orange: A=255, R=255, G=165, B=0  (float arithmetic avoids signed-int issues)
   var OVERLAY_COLOR = (255 * 16777216 + 255 * 65536 + 165 * 256 + 0) | 0;
 
   // ── State ────────────────────────────────────────────────────────
-  var kp = {};   // { name: { pts, w, h } | null }
+  var refs = {};   // { name: ImageData | null }
 
-  // ── Load a reference image and extract keypoints ─────────────────
-  // Canvas gives RGBA; alt1 capture is BGRA — we store (r,g,b) from
-  // the reference so the comparison function can swap channels.
+  // ── Load a reference PNG as a standard RGBA ImageData ─────────────
+  // a1lib.findSubimage() accepts plain canvas ImageData as the needle.
   function loadRef(name, path) {
     return new Promise(function (resolve) {
       var img = new Image();
+      img.crossOrigin = 'anonymous';
       img.onload = function () {
         var c = document.createElement('canvas');
         c.width  = img.naturalWidth;
         c.height = img.naturalHeight;
         c.getContext('2d').drawImage(img, 0, 0);
-        var id = c.getContext('2d').getImageData(0, 0, c.width, c.height);
-        kp[name] = buildKP(id);
+        refs[name] = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+        console.log('[VGT-haunt] Loaded "' + name + '" (' + refs[name].width + 'x' + refs[name].height + ')');
         resolve();
       };
       img.onerror = function () {
-        console.warn('[VGT-haunt] Could not load image:', path);
-        kp[name] = null;
+        console.warn('[VGT-haunt] Could not load:', path);
+        refs[name] = null;
         resolve();
       };
       img.src = path;
     });
   }
 
-  // ── Build up to MAX_KP evenly-spaced opaque keypoints ────────────
-  function buildKP(imgData) {
-    var w = imgData.width, h = imgData.height, d = imgData.data;
-    var all = [];
-    for (var y = 0; y < h; y++) {
-      for (var x = 0; x < w; x++) {
-        var i = (y * w + x) * 4;
-        if (d[i + 3] >= 128) {
-          all.push({ nx: x, ny: y, r: d[i], g: d[i + 1], b: d[i + 2] });
-        }
-      }
+  // ── Image search via a1lib ────────────────────────────────────────
+  // a1lib.findSubimage(ImgRefBind, ImageData) → [{x,y}]
+  // Uses native alt1.bindFindSubImg when available (fast),
+  // falls back to JS comparison — handles pixel format internally.
+  function imageFound(screen, name) {
+    if (!refs[name] || !screen) return false;
+    try {
+      var hits = a1lib.findSubimage(screen, refs[name]);
+      return hits && hits.length > 0;
+    } catch (e) {
+      console.warn('[VGT-haunt] findSubimage("' + name + '") error:', e);
+      return false;
     }
-    if (all.length === 0) return null;
-    if (all.length <= MAX_KP) return { pts: all, w: w, h: h };
-
-    var step = Math.floor(all.length / MAX_KP);
-    var pts  = [];
-    for (var j = 0; j < all.length; j += step) {
-      pts.push(all[j]);
-      if (pts.length >= MAX_KP) break;
-    }
-    return { pts: pts, w: w, h: h };
-  }
-
-  // ── Search for a reference's keypoints inside a captured screen ──
-  // Screen data from alt1 is BGRA; reference keypoints are RGBA.
-  // We compare: screen[i+0]=B↔ref.b, [i+1]=G↔ref.g, [i+2]=R↔ref.r
-  function imageFound(screen, ref) {
-    if (!ref || !ref.pts || !screen) return false;
-
-    var hw  = screen.width, hh = screen.height;
-    var hd  = screen.data;
-    var pts = ref.pts, nw = ref.w, nh = ref.h;
-    var tol = TOLERANCE;
-    var first = pts[0];
-
-    for (var y = 0; y <= hh - nh; y++) {
-      for (var x = 0; x <= hw - nw; x++) {
-
-        // Fast first-keypoint check (eliminates ~99% of positions)
-        var hi = ((y + first.ny) * hw + (x + first.nx)) * 4;
-        if (Math.abs(hd[hi]     - first.b) > tol) continue;
-        if (Math.abs(hd[hi + 1] - first.g) > tol) continue;
-        if (Math.abs(hd[hi + 2] - first.r) > tol) continue;
-
-        // Full keypoint check
-        var match = true;
-        for (var k = 1; k < pts.length; k++) {
-          var p  = pts[k];
-          var pi = ((y + p.ny) * hw + (x + p.nx)) * 4;
-          if (Math.abs(hd[pi]     - p.b) > tol ||
-              Math.abs(hd[pi + 1] - p.g) > tol ||
-              Math.abs(hd[pi + 2] - p.r) > tol) {
-            match = false;
-            break;
-          }
-        }
-        if (match) return true;
-      }
-    }
-    return false;
   }
 
   // ── Overlay ───────────────────────────────────────────────────────
   function showReminder() {
-    // Estimate horizontal centre (text ~320 px wide at size 28)
     var cx = alt1.rsX + Math.floor(alt1.rsWidth  / 2) - 160;
     var cy = alt1.rsY + Math.floor(alt1.rsHeight / 2);
     alt1.overLayText(OVERLAY_TEXT, OVERLAY_COLOR, OVERLAY_SIZE, cx, cy, OVERLAY_MS);
   }
 
   // ── Main scan ─────────────────────────────────────────────────────
+  var scanCount = 0;
   function scan() {
-    if (!alt1.rsLinked) return;
+    var tick = ++scanCount;
 
-    var screen = alt1.captureHoldFullRs();
-    if (!screen) return;
+    if (!alt1.rsLinked) {
+      if (tick % 5 === 1) console.log('[VGT-haunt] RS not linked');
+      return;
+    }
 
-    // Step 1 — confirm encounter is active (all three must be visible)
-    if (!imageFound(screen, kp.zemouregal))   return;
-    if (!imageFound(screen, kp.vorkath))      return;
-    if (!imageFound(screen, kp.ghostTrigger)) return;
+    var screen;
+    try {
+      screen = a1lib.captureHoldFullRs();
+    } catch (e) {
+      console.warn('[VGT-haunt] Capture error:', e);
+      return;
+    }
+    if (!screen) { console.warn('[VGT-haunt] No capture returned'); return; }
 
-    // Step 2 — if Haunt ghost is NOT visible, remind the player
-    if (!imageFound(screen, kp.ghostHaunt)) {
+    if (tick % 10 === 1) {
+      console.log('[VGT-haunt] Scan #' + tick + ' — ' + screen.width + 'x' + screen.height);
+    }
+
+    // Step 1: confirm all three encounter indicators are on screen
+    if (!imageFound(screen, 'zemouregal'))   return;
+    if (!imageFound(screen, 'vorkath'))      return;
+    if (!imageFound(screen, 'ghostTrigger')) return;
+
+    console.log('[VGT-haunt] Encounter active!');
+
+    // Step 2: if purple ghost (Haunt) is not present, remind the player
+    if (!imageFound(screen, 'ghostHaunt')) {
+      console.log('[VGT-haunt] Ghost haunt MISSING — overlay');
       showReminder();
+    } else {
+      if (tick % 5 === 0) console.log('[VGT-haunt] Ghost haunt present — OK');
     }
   }
 
   // ── Init ──────────────────────────────────────────────────────────
   function init() {
+    console.log('[VGT-haunt] Starting up...');
+
+    if (typeof a1lib === 'undefined' || !a1lib.findSubimage) {
+      console.error('[VGT-haunt] a1lib.findSubimage not available — detection disabled');
+      return;
+    }
+
     Promise.all([
       loadRef('zemouregal',   './src/img/zemouregal.png'),
       loadRef('vorkath',      './src/img/vorkath.png'),
       loadRef('ghostTrigger', './src/img/ghost_trigger.png'),
       loadRef('ghostHaunt',   './src/img/ghost_haunt.png'),
     ]).then(function () {
-      var loaded = Object.keys(kp).filter(function (k) { return kp[k] !== null; }).length;
-      console.log('[VGT-haunt] Loaded ' + loaded + '/4 reference images. Detector running.');
+      var ok = Object.keys(refs).filter(function (n) { return refs[n] !== null; }).length;
+      console.log('[VGT-haunt] ' + ok + '/4 images loaded. Scanning every ' + SCAN_MS + 'ms.');
       setInterval(scan, SCAN_MS);
     });
   }
