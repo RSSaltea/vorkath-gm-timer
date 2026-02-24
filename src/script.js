@@ -13,8 +13,11 @@ const SHEET_NAME  = 'List';
 const REFRESH_MS  = 10_000;   // auto-refresh interval (10 s)
 
 const GAS_URL = 'https://script.google.com/macros/s/' +
-                'AKfycbx3cPpcNJaXIlVpUajR7b86MdbkTXhTqYX4WX6FYrE9x6f5Bz4FRy79CGQB8E4TMh9xCg' +
+                'AKfycbzPxwizWq7ewt0UBWlRSNbHlSbjjV5kQBXjIGghvCdMYSpCke3ZpT-R5oj-KWghfwrb' +
                 '/exec';
+
+const HEARTBEAT_MS         = 30_000;  // send heartbeat every 30 s
+const ONLINE_THRESHOLD_MS  = 60_000;  // online if heartbeat < 60 s old
 
 // ── State ─────────────────────────────────────────────────────────
 let queueData       = [];   // current full queue (array of strings)
@@ -22,6 +25,8 @@ let wasFirst        = false;
 let wasInTopThree   = false;
 let refreshTimer    = null;
 let submissionsOpen = true; // controlled by Responses!G947
+let heartbeatTimer  = null;
+let heartbeatData   = {};    // { lowercaseName: isoTimestamp }
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -216,9 +221,14 @@ function updateQueueList(queue) {
 
     var youTag = isYou ? '<span class="you-tag">YOU</span>' : '';
 
+    var online   = isOnline(n);
+    var dotClass = online ? 'vgt-presence online' : 'vgt-presence offline';
+    var dotTitle = online ? 'Online — plugin active' : 'Offline — plugin not detected';
+
     html +=
       '<div class="' + cls + '">' +
         '<span class="vgt-queue-rank">#' + rank + '</span>' +
+        '<span class="' + dotClass + '" title="' + dotTitle + '"></span>' +
         '<span class="vgt-queue-name">' + escapeHtml(n) + youTag + '</span>' +
         badge +
       '</div>';
@@ -292,10 +302,57 @@ async function fetchSubmissionsOpen() {
   }
 }
 
+// ── Heartbeat ─────────────────────────────────────────────────────
+
+async function sendHeartbeat() {
+  var name = getEffectiveName();
+  if (!name) return;
+  try {
+    await fetch(
+      GAS_URL + '?action=heartbeat&name=' + encodeURIComponent(name),
+      { cache: 'no-store' }
+    );
+  } catch (err) {
+    console.warn('[VGT] Heartbeat send failed:', err);
+  }
+}
+
+async function fetchHeartbeats() {
+  try {
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+              '/gviz/tq?tqx=out:csv&sheet=Heartbeats&range=A2:B';
+    var resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var text = await resp.text();
+    var rows = text.split('\n');
+    heartbeatData = {};
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i].trim()) continue;
+      // Split on first comma only — timestamp may contain commas if Sheets auto-formats
+      var idx = rows[i].indexOf(',');
+      if (idx === -1) continue;
+      var n  = rows[i].substring(0, idx).replace(/^"|"$/g, '').trim().toLowerCase();
+      var ts = rows[i].substring(idx + 1).replace(/^"|"$/g, '').trim();
+      if (n) heartbeatData[n] = ts;
+    }
+  } catch (err) {
+    console.warn('[VGT] Heartbeat fetch failed:', err);
+  }
+}
+
+function isOnline(name) {
+  var key  = name.toLowerCase();
+  var ts   = heartbeatData[key];
+  if (!ts) return false;
+  var then = new Date(ts).getTime();
+  if (isNaN(then)) return false;
+  return (Date.now() - then) < ONLINE_THRESHOLD_MS;
+}
+
 async function refresh() {
   setDot('loading');
 
-  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen()]);
+  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats()]);
   var queue   = results[0];
 
   if (queue) {
@@ -382,6 +439,7 @@ function init() {
     updateQueueList(queueData);
     clearTimeout(nameDebounce);
     nameDebounce = setTimeout(refresh, 1000);
+    sendHeartbeat();
   });
 
   // ── Join Queue button
@@ -396,6 +454,10 @@ function init() {
 
   // ── Auto-refresh
   refreshTimer = setInterval(refresh, REFRESH_MS);
+
+  // ── Heartbeat — announce presence every 30 s
+  sendHeartbeat();
+  heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
 }
 
 // ── Identify app to Alt1 on script load ───────────────────────────

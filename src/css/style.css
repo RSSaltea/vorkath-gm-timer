@@ -428,6 +428,26 @@ body.nis {
   font-weight: 600;
 }
 
+/* ── Presence Dot (online / offline indicator) ────────────────────── */
+.vgt-presence {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.vgt-presence.online {
+  background: var(--turn);
+  box-shadow: 0 0 5px var(--turn);
+}
+
+.vgt-presence.offline {
+  background: var(--error);
+  box-shadow: none;
+  opacity: 0.6;
+}
+
 /* ── Badges ─────────────────────────────────────────────────────── */
 .vgt-badge {
   font-size: 10px;
