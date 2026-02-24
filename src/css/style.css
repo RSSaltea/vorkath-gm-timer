@@ -528,3 +528,95 @@ body.nis {
 .vgt-join-btn.closed {
   background: var(--neutral);
 }
+
+/* ── Info Tab ───────────────────────────────────────────────────── */
+.vgt-info-hero {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 14px 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.vgt-info-fc-name {
+  font-family: 'rs-pro-3', 'Segoe UI', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 8px rgba(74,158,255,0.35);
+}
+
+.vgt-info-tagline {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  letter-spacing: 0.4px;
+}
+
+.vgt-info-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  flex-shrink: 0;
+}
+
+.vgt-info-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.vgt-info-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.vgt-info-list li::before {
+  content: '▸';
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* shared button base */
+.vgt-info-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  text-decoration: none;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+
+.vgt-info-btn:hover { opacity: 0.85; }
+.vgt-info-btn:active { opacity: 0.7; }
+
+.vgt-info-btn--yt {
+  background: #cc0000;
+  color: #fff;
+}
+
+.vgt-info-btn--discord {
+  background: #5865F2;
+  color: #fff;
+}
+
+.vgt-discord-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
