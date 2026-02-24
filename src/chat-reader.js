@@ -35,8 +35,19 @@
   var emptyCount  = 0;
 
   // ── Overlay ──────────────────────────────────────────────────────
+  // Measure text width via canvas so the overlay is truly centred.
+  function overlayHalfWidth(text, size) {
+    try {
+      var ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = 'bold ' + size + 'px Arial';
+      return Math.floor(ctx.measureText(text).width / 2);
+    } catch (e) { return 0; }
+  }
+
+  var _halfW = overlayHalfWidth(OVERLAY_TEXT, OVERLAY_SIZE);
+
   function showOverlay() {
-    var cx = alt1.rsX + Math.floor(alt1.rsWidth  / 2) - 140;
+    var cx = alt1.rsX + Math.floor(alt1.rsWidth  / 2) - _halfW;
     var cy = alt1.rsY + Math.floor(alt1.rsHeight / 2) - 55;
     alt1.overLayText(OVERLAY_TEXT, OVERLAY_COLOR, OVERLAY_SIZE, cx + 1, cy, FLASH_ON_MS);
     alt1.overLayText(OVERLAY_TEXT, OVERLAY_COLOR, OVERLAY_SIZE, cx,     cy, FLASH_ON_MS);
