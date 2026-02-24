@@ -1,10 +1,11 @@
 /* ================================================================
-   Vorkath GM Timer — haunt-detector.js  v1.2
+   Vorkath GM Timer — haunt-detector.js  v1.4
    ================================================================
-   Uses a1lib.captureHoldFullRs() + a1lib.findSubimage() — the same
-   API used by AFKWarden and other RuneApps plugins.
+   Uses alt1.bindRegion + alt1.bindFindSubImg directly —
+   the same native functions used internally by a1lib,
+   without depending on any library global being available.
 
-   Scans the full RS screen every 2 s.
+   Scans the full RS screen every 4 ticks (2400 ms).
    Trigger:   zemouregal + vorkath + ghost_trigger all visible
    Condition: ghost_haunt NOT visible
    Action:    flash "Command Ghost for Haunt" at screen centre
@@ -22,14 +23,26 @@
 
   var OVERLAY_TEXT  = 'Command Ghost for Haunt';
   var OVERLAY_SIZE  = 28;
-  // ARGB orange: A=255, R=255, G=165, B=0  (float arithmetic avoids signed-int issues)
+  // ARGB orange: A=255, R=255, G=165, B=0
   var OVERLAY_COLOR = (255 * 16777216 + 255 * 65536 + 165 * 256 + 0) | 0;
 
   // ── State ────────────────────────────────────────────────────────
-  var refs = {};   // { name: ImageData | null }
+  var refs    = {};   // { name: ImageData }
+  var needles = {};   // { name: BGR base64 string for bindFindSubImg }
 
-  // ── Load a reference PNG as a standard RGBA ImageData ─────────────
-  // a1lib.findSubimage() accepts plain canvas ImageData as the needle.
+  // ── Encode reference image as BGR base64 for bindFindSubImg ──────
+  // alt1.bindFindSubImg expects the needle as a base64 string of
+  // raw BGR bytes (3 bytes per pixel, no alpha, Blue first).
+  function encodeNeedle(imgData) {
+    var d     = imgData.data;
+    var bytes = '';
+    for (var i = 0; i < d.length; i += 4) {
+      bytes += String.fromCharCode(d[i + 2], d[i + 1], d[i]); // B, G, R
+    }
+    return btoa(bytes);
+  }
+
+  // ── Load a reference PNG as canvas ImageData ─────────────────────
   function loadRef(name, path) {
     return new Promise(function (resolve) {
       var img = new Image();
@@ -39,30 +52,47 @@
         c.width  = img.naturalWidth;
         c.height = img.naturalHeight;
         c.getContext('2d').drawImage(img, 0, 0);
-        refs[name] = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+        refs[name]    = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+        needles[name] = encodeNeedle(refs[name]);
         console.log('[VGT-haunt] Loaded "' + name + '" (' + refs[name].width + 'x' + refs[name].height + ')');
         resolve();
       };
       img.onerror = function () {
         console.warn('[VGT-haunt] Could not load:', path);
-        refs[name] = null;
+        refs[name]    = null;
+        needles[name] = null;
         resolve();
       };
       img.src = path;
     });
   }
 
-  // ── Image search via a1lib ────────────────────────────────────────
-  // a1lib.findSubimage(ImgRefBind, ImageData) → [{x,y}]
-  // Uses native alt1.bindFindSubImg when available (fast),
-  // falls back to JS comparison — handles pixel format internally.
-  function imageFound(screen, name) {
-    if (!refs[name] || !screen) return false;
+  // ── Capture + search ─────────────────────────────────────────────
+  // bindRegion(x, y, w, h) — captures a fresh screenshot into a handle
+  // bindFindSubImg(handle, bgrBase64, needleW, sx, sy, sw, sh) → JSON [{x,y}]
+  var handle = 0;
+
+  function capture() {
     try {
-      var hits = a1lib.findSubimage(screen, refs[name]);
-      return hits && hits.length > 0;
+      handle = alt1.bindRegion(0, 0, alt1.rsWidth, alt1.rsHeight);
+      return handle > 0;
     } catch (e) {
-      console.warn('[VGT-haunt] findSubimage("' + name + '") error:', e);
+      console.warn('[VGT-haunt] bindRegion error:', e);
+      return false;
+    }
+  }
+
+  function imageFound(name) {
+    if (!needles[name] || handle <= 0) return false;
+    try {
+      var nw = refs[name].width;
+      var r  = alt1.bindFindSubImg(handle, needles[name], nw,
+                                   0, 0, alt1.rsWidth, alt1.rsHeight);
+      if (!r) return false;
+      var hits = JSON.parse(r);
+      return Array.isArray(hits) && hits.length > 0;
+    } catch (e) {
+      console.warn('[VGT-haunt] bindFindSubImg("' + name + '") error:', e);
       return false;
     }
   }
@@ -74,7 +104,7 @@
     alt1.overLayText(OVERLAY_TEXT, OVERLAY_COLOR, OVERLAY_SIZE, cx, cy, OVERLAY_MS);
   }
 
-  // ── Main scan ─────────────────────────────────────────────────────
+  // ── Scan ──────────────────────────────────────────────────────────
   var scanCount = 0;
   function scan() {
     var tick = ++scanCount;
@@ -84,29 +114,21 @@
       return;
     }
 
-    var screen;
-    try {
-      screen = a1lib.captureHoldFullRs();
-    } catch (e) {
-      console.warn('[VGT-haunt] Capture error:', e);
-      return;
-    }
-    if (!screen) { console.warn('[VGT-haunt] No capture returned'); return; }
+    if (!capture()) return;
 
     if (tick % 10 === 1) {
-      console.log('[VGT-haunt] Scan #' + tick + ' — ' + screen.width + 'x' + screen.height);
+      console.log('[VGT-haunt] Scan #' + tick + ' — RS ' + alt1.rsWidth + 'x' + alt1.rsHeight);
     }
 
-    // Step 1: confirm all three encounter indicators are on screen
-    if (!imageFound(screen, 'zemouregal'))   return;
-    if (!imageFound(screen, 'vorkath'))      return;
-    if (!imageFound(screen, 'ghostTrigger')) return;
+    // Short-circuit: require all three trigger images
+    if (!imageFound('zemouregal'))   return;
+    if (!imageFound('vorkath'))      return;
+    if (!imageFound('ghostTrigger')) return;
 
-    console.log('[VGT-haunt] Encounter active!');
+    console.log('[VGT-haunt] Encounter detected!');
 
-    // Step 2: if purple ghost (Haunt) is not present, remind the player
-    if (!imageFound(screen, 'ghostHaunt')) {
-      console.log('[VGT-haunt] Ghost haunt MISSING — overlay');
+    if (!imageFound('ghostHaunt')) {
+      console.log('[VGT-haunt] Ghost haunt MISSING — showing overlay');
       showReminder();
     } else {
       if (tick % 5 === 0) console.log('[VGT-haunt] Ghost haunt present — OK');
@@ -117,9 +139,26 @@
   function init() {
     console.log('[VGT-haunt] Starting up...');
 
-    if (typeof a1lib === 'undefined' || !a1lib.findSubimage) {
-      console.error('[VGT-haunt] a1lib.findSubimage not available — detection disabled');
-      return;
+    if (!alt1.bindFindSubImg) {
+      // Try library globals as fallback
+      var lib = (typeof a1lib !== 'undefined' && a1lib) ||
+                (typeof A1lib !== 'undefined' && A1lib) || null;
+      if (!lib || !lib.findSubimage) {
+        console.error('[VGT-haunt] No image detection API found (bindFindSubImg, a1lib, A1lib all missing)');
+        return;
+      }
+      // Rewire to use library findSubimage
+      console.log('[VGT-haunt] Using library findSubimage fallback');
+      imageFound = function (name) {
+        if (!refs[name]) return false;
+        try {
+          var screen = lib.captureHoldFullRs ? lib.captureHoldFullRs() :
+                       lib.captureHold(0, 0, alt1.rsWidth, alt1.rsHeight);
+          var hits = lib.findSubimage(screen, refs[name]);
+          return hits && hits.length > 0;
+        } catch (e) { return false; }
+      };
+      capture = function () { return true; }; // no-op in library mode
     }
 
     Promise.all([
