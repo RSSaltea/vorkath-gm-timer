@@ -1,12 +1,14 @@
 /* ================================================================
-   Vorkath GM Timer — haunt-detector.js  v1.9
+   Vorkath GM Timer — haunt-detector.js  v2.0
    ================================================================
-   Logic (runs every 4 ticks / 2400 ms):
-     1. If vorkath.png OR zemouregal.png is found  → encounter active
-     2. If encounter active AND ghost_trigger.png NOT found
-        → flash red "Command Ghost for Haunt!" at screen centre
-     3. As soon as BOTH disappear (encounter over) OR ghost_trigger
-        is found → stop calling overLayText; overlay expires in 2500 ms
+   Logic (scan every 4 ticks / 2400 ms):
+     1. vorkath.png OR zemouregal.png visible  → encounter active
+     2. ghostTrigger NOT found while active    → start flashing
+     3. Either NPC gone OR ghostTrigger found  → stop flashing
+
+   Flash effect: overLayText every 1000 ms with 700 ms duration
+   → text visible 700 ms, off 300 ms per cycle.
+   Fake bold: text drawn twice with 1 px horizontal offset.
    ================================================================ */
 
 'use strict';
@@ -16,18 +18,20 @@
   if (typeof alt1 === 'undefined') return;
 
   // ── Config ──────────────────────────────────────────────────────
-  var SCAN_MS    = 2400;   // 4 RS ticks (4 × 600 ms)
-  var OVERLAY_MS = 2500;   // slightly longer than scan interval
+  var SCAN_MS      = 2400;   // 4 RS ticks
+  var FLASH_INT_MS = 1000;   // flash cycle (ms)
+  var FLASH_ON_MS  = 700;    // how long text stays visible each cycle
 
-  var OVERLAY_TEXT  = 'Command Ghost for Haunt!';
-  var OVERLAY_SIZE  = 28;
-  // ARGB red: A=255, R=255, G=0, B=0  →  0xFFFF0000
+  var OVERLAY_TEXT  = 'COMMAND GHOST FOR HAUNT!';
+  var OVERLAY_SIZE  = 32;
+  // ARGB red: A=255, R=255, G=0, B=0
   var OVERLAY_COLOR = (255 * 16777216 + 255 * 65536 + 0 * 256 + 0) | 0;
 
   // ── State ────────────────────────────────────────────────────────
-  var refs   = {};
-  var lib    = null;
-  var screen = null;
+  var refs       = {};
+  var lib        = null;
+  var screen     = null;
+  var flashTimer = null;   // non-null while flashing
 
   // ── Resolve A1lib ────────────────────────────────────────────────
   function resolveLib() {
@@ -50,7 +54,7 @@
           console.log('[VGT-haunt] Loaded "' + name + '" (' + imgData.width + 'x' + imgData.height + ')');
         })
         .catch(function (e) {
-          console.warn('[VGT-haunt] Failed to load "' + name + '":', e);
+          console.warn('[VGT-haunt] Failed "' + name + '":', e);
           refs[name] = null;
         });
     }
@@ -75,9 +79,7 @@
     try {
       screen = lib.captureHoldFullRs();
       return screen != null;
-    } catch (e) {
-      return false;
-    }
+    } catch (e) { return false; }
   }
 
   // ── Search ────────────────────────────────────────────────────────
@@ -88,23 +90,35 @@
         ? screen.findSubimage(refs[name])
         : lib.findSubimage(screen, refs[name]);
       return Array.isArray(hits) && hits.length > 0;
-    } catch (e) {
-      return false;
-    }
+    } catch (e) { return false; }
   }
 
-  // ── Overlay ───────────────────────────────────────────────────────
+  // ── Overlay: flashing bold red text ──────────────────────────────
+  // Drawn twice with 1 px x-offset for a fake-bold appearance.
   function showReminder() {
-    var cx = alt1.rsX + Math.floor(alt1.rsWidth  / 2) - 160;
+    var cx = alt1.rsX + Math.floor(alt1.rsWidth  / 2) - 200;
     var cy = alt1.rsY + Math.floor(alt1.rsHeight / 2);
-    alt1.overLayText(OVERLAY_TEXT, OVERLAY_COLOR, OVERLAY_SIZE, cx, cy, OVERLAY_MS);
+    alt1.overLayText(OVERLAY_TEXT, OVERLAY_COLOR, OVERLAY_SIZE, cx + 1, cy, FLASH_ON_MS);
+    alt1.overLayText(OVERLAY_TEXT, OVERLAY_COLOR, OVERLAY_SIZE, cx,     cy, FLASH_ON_MS);
+  }
+
+  function startFlashing() {
+    if (flashTimer) return;   // already flashing
+    showReminder();
+    flashTimer = setInterval(showReminder, FLASH_INT_MS);
+  }
+
+  function stopFlashing() {
+    if (!flashTimer) return;  // already stopped
+    clearInterval(flashTimer);
+    flashTimer = null;
+    // Overlay expires on its own within FLASH_ON_MS
   }
 
   // ── Scan ──────────────────────────────────────────────────────────
   var scanCount = 0;
   function scan() {
     var tick = ++scanCount;
-
     if (!alt1.rsLinked) return;
     if (!captureScreen()) return;
 
@@ -112,26 +126,22 @@
       console.log('[VGT-haunt] Scan #' + tick);
     }
 
-    // Step 1: encounter active if Vorkath OR Zemouregal is visible
     var encounterActive = imageFound('vorkath') || imageFound('zemouregal');
-    if (!encounterActive) return;
 
-    // Step 2: ghost trigger missing → remind player
-    if (!imageFound('ghostTrigger')) {
-      showReminder();
+    if (encounterActive && !imageFound('ghostTrigger')) {
+      startFlashing();
+    } else {
+      stopFlashing();
     }
-    // If ghostTrigger IS found, do nothing — let the overlay expire
   }
 
   // ── Init ──────────────────────────────────────────────────────────
   function init() {
-    console.log('[VGT-haunt] Starting up (v1.9)...');
-
+    console.log('[VGT-haunt] Starting up (v2.0)...');
     if (!resolveLib()) {
       console.error('[VGT-haunt] A1lib not available.');
       return;
     }
-
     Promise.all([
       loadRef('vorkath',      './src/img/vorkath.png'),
       loadRef('zemouregal',   './src/img/zemouregal.png'),
