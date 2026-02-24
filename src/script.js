@@ -445,21 +445,16 @@ async function fetchStats() {
 async function fetchCompleted() {
   try {
     var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              '/gviz/tq?tqx=out:csv&sheet=Responses&range=B2:C';
+              "/gviz/tq?tqx=out:csv&sheet=Responses&tq=" +
+              encodeURIComponent("SELECT B WHERE C='done'");
     var resp = await fetch(url, { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var text = await resp.text();
     var lines = text.split('\n');
     var names = [];
     for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].trim();
-      if (!line) continue;
-      var match = line.match(/^"?([^"]*)"?\s*,\s*"?([^"]*)"?$/);
-      if (match) {
-        var name = match[1].trim();
-        var status = match[2].trim().toLowerCase();
-        if (name && status === 'done') names.push(name);
-      }
+      var name = lines[i].replace(/^"|"$/g, '').trim();
+      if (name && name.toLowerCase() !== 'your runescape name?') names.push(name);
     }
     completedData = names;
     updateCompletedPanel();
@@ -598,7 +593,7 @@ function isOnline(name) {
 async function refresh() {
   setDot('loading');
 
-  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats(), fetchCompleted()]);
+  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats()]);
   var queue   = results[0];
 
   if (queue) {
@@ -703,6 +698,10 @@ function init() {
 
   // ── Auto-refresh
   refreshTimer = setInterval(refresh, REFRESH_MS);
+
+  // ── Completed list — refresh every 60 s
+  fetchCompleted();
+  setInterval(fetchCompleted, 60_000);
 
   // ── Heartbeat — announce presence every 15 s
   sendHeartbeat();
