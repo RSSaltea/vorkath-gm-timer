@@ -658,6 +658,7 @@ function init() {
       adminOverlay.style.display = 'none';
       adminBtn.textContent = 'Admin \u2713';
       adminBtn.classList.add('active');
+      updateToggleOpenBtn();
       updateQueueList(queueData);
     } else {
       adminError.textContent = 'Invalid key';
