@@ -28,10 +28,13 @@
   var OVERLAY_COLOR = (255 * 16777216 + 255 * 65536 + 0 * 256 + 0) | 0;
 
   // ── State ────────────────────────────────────────────────────────
+  var GHOST_SKIP_MS = 10000; // skip ghost checks for 10 s after a match
+
   var refs       = {};
   var lib        = null;
   var screen     = null;
   var flashTimer = null;   // non-null while flashing
+  var ghostFoundAt = 0;    // timestamp of last ghost trigger match
 
   // ── Resolve A1lib ────────────────────────────────────────────────
   function resolveLib() {
@@ -142,7 +145,17 @@
     // Expose for chat-reader.js so MOVE SOUTH only triggers mid-encounter.
     window.VGT_encounterActive = encounterActive;
 
-    if (window.VGT_remindersEnabled !== false && encounterActive && !imageFound('ghostTrigger')) {
+    // Check all ghost trigger variants (normal + cooldown states).
+    // If any match, skip further checks for 10 s.
+    var ghostVisible = false;
+    if (Date.now() - ghostFoundAt < GHOST_SKIP_MS) {
+      ghostVisible = true;  // still within skip window
+    } else if (imageFound('ghostTrigger') || imageFound('ghostTrigger2') || imageFound('ghostTrigger3') || imageFound('ghostTrigger4') || imageFound('ghostTriggerBackup')) {
+      ghostVisible = true;
+      ghostFoundAt = Date.now();
+    }
+
+    if (window.VGT_remindersEnabled !== false && encounterActive && !ghostVisible) {
       startFlashing();
     } else {
       stopFlashing();
@@ -156,14 +169,19 @@
       console.error('[VGT-haunt] A1lib not available.');
       return;
     }
+    var ghostRefs = ['ghostTrigger', 'ghostTrigger2', 'ghostTrigger3', 'ghostTrigger4', 'ghostTriggerBackup'];
     Promise.all([
-      loadRef('vorkath',      './src/img/vorkath.png'),
-      loadRef('zemouregal',   './src/img/zemouregal.png'),
-      loadRef('ghostTrigger', './src/img/ghost_trigger.png'),
+      loadRef('vorkath',             './src/img/vorkath.png'),
+      loadRef('zemouregal',          './src/img/zemouregal.png'),
+      loadRef('ghostTrigger',        './src/img/ghost_trigger.png'),
+      loadRef('ghostTrigger2',       './src/img/ghost_trigger2.png'),
+      loadRef('ghostTrigger3',       './src/img/ghost_trigger3.png'),
+      loadRef('ghostTrigger4',       './src/img/ghost_trigger4.png'),
+      loadRef('ghostTriggerBackup',  './src/img/ghost_trigger_backup.png'),
     ]).then(function () {
-      var loaded = ['vorkath', 'zemouregal', 'ghostTrigger']
-                    .filter(function (n) { return refs[n] !== null; }).length;
-      console.log('[VGT-haunt] ' + loaded + '/3 images loaded. Scanning every ' + SCAN_MS + 'ms.');
+      var allRefs = ['vorkath', 'zemouregal'].concat(ghostRefs);
+      var loaded = allRefs.filter(function (n) { return refs[n] !== null; }).length;
+      console.log('[VGT-haunt] ' + loaded + '/' + allRefs.length + ' images loaded. Scanning every ' + SCAN_MS + 'ms.');
       setInterval(scan, SCAN_MS);
     });
   }
