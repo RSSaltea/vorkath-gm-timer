@@ -169,7 +169,7 @@ function updateStatus(queue) {
     alertIcon.textContent  = '⚠️';
     alertTitle.textContent = 'Get ready!';
     alertSub.innerHTML     = (currentWorld
-      ? 'You are #' + rank + ' — head to World: ' + currentWorld + ' please'
+      ? 'You are #' + rank + ' — head to World: ' + currentWorld + ' now'
       : 'You are #' + rank + ' — up soon')
       + '<br>Please be at the statue ready to fight Vorkath';
     if (!wasInTopThree) playAlert('soon');
