@@ -1,10 +1,14 @@
 /* ================================================================
-   Vorkath GM Timer — chat-reader.js  v2.3
+   Vorkath GM Timer — chat-reader.js  v2.4
    ================================================================
    reader.find() does not auto-detect in our UMD context.
    After 3 failed find() attempts we manually set reader.pos to
    the standard RS3 chatbox coordinates (bottom-left of RS window).
    reader.read() uses reader.pos.mainbox.rect to know where to OCR.
+
+   v2.4 fix: preserve readargs.font from the Chatbox constructor.
+   Replacing readargs entirely stripped the font, causing OCR to
+   return 0 segments even with a valid pos.
    ================================================================ */
 
 'use strict';
@@ -75,12 +79,17 @@
   function initWithChatbox() {
     var reader = new Chatbox.default();
 
+    // Preserve the font the constructor loaded; only update colors/direction.
+    // Replacing readargs entirely strips readargs.font → OCR finds nothing.
+    var initFont = reader.readargs && reader.readargs.font;
     reader.readargs = {
-      colors: Chatbox.defaultcolors || [],
+      font:      initFont || Chatbox.chatfonts,
+      colors:    Chatbox.defaultcolors || [],
       backwards: true,
     };
 
-    console.log('[VGT-chat] reader created | defaultcolors:', (Chatbox.defaultcolors || []).length);
+    console.log('[VGT-chat] reader created | defaultcolors:', (Chatbox.defaultcolors || []).length,
+                '| font:', (initFont || Chatbox.chatfonts) ? 'set' : 'MISSING');
 
     var findAttempts = 0;
     var scanCount    = 0;
