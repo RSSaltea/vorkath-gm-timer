@@ -1,16 +1,16 @@
 /* ================================================================
-   Vorkath GM Timer — haunt-detector.js  v1.6
+   Vorkath GM Timer — haunt-detector.js  v1.7
    ================================================================
-   Uses alt1.bindRegion + alt1.bindFindSubImg directly.
+   Switches from native alt1.bindFindSubImg (zero-tolerance exact
+   matching) to A1lib.captureHoldFullRs() + ImgRef.findSubimage(),
+   which is the standard approach used by AFKWarden, buff bars, etc.
+   findSubimage uses tolerance-based template matching and handles
+   the Alt1 memory model correctly.
 
    Scans the full RS screen every 4 ticks (2400 ms).
    Trigger:   zemouregal + vorkath + ghost_trigger all visible
    Condition: ghost_haunt NOT visible
    Action:    flash "Command Ghost for Haunt" at screen centre
-
-   v1.6 fix: load reference images via fetch + createImageBitmap
-   with colorSpaceConversion:'none' so Chromium does not apply
-   sRGB gamma transforms that alter pixel values and break matching.
    ================================================================ */
 
 'use strict';
@@ -29,26 +29,29 @@
   var OVERLAY_COLOR = (255 * 16777216 + 255 * 65536 + 165 * 256 + 0) | 0;
 
   // ── State ────────────────────────────────────────────────────────
-  var refs    = {};   // { name: ImageData }
-  var needles = {};   // { name: BGR base64 string for bindFindSubImg }
+  var refs   = {};    // { name: ImageData }
+  var lib    = null;  // resolved A1lib reference
+  var screen = null;  // captured ImgRef for current scan tick
 
-  // ── Encode reference image as BGR base64 for bindFindSubImg ──────
-  // alt1.bindFindSubImg expects the needle as a base64 string of
-  // raw BGR bytes (3 bytes per pixel, no alpha, Blue first).
-  function encodeNeedle(imgData) {
-    var d     = imgData.data;
-    var bytes = '';
-    for (var i = 0; i < d.length; i += 4) {
-      bytes += String.fromCharCode(d[i + 2], d[i + 1], d[i]); // B, G, R
+  // ── Resolve the A1lib global ─────────────────────────────────────
+  // The UMD bundle at unpkg.com/alt1/dist/base/index.js exposes the
+  // library as window.A1lib (capital).  Some older builds use a1lib.
+  function resolveLib() {
+    if (lib) return lib;
+    var candidate =
+      (typeof A1lib !== 'undefined' && A1lib && A1lib.captureHoldFullRs && A1lib) ||
+      (typeof a1lib !== 'undefined' && a1lib && a1lib.captureHoldFullRs && a1lib) ||
+      null;
+    if (candidate) {
+      lib = candidate;
+      console.log('[VGT-haunt] capture lib resolved:', lib === A1lib ? 'A1lib' : 'a1lib');
     }
-    return btoa(bytes);
+    return lib;
   }
 
   // ── Load reference PNG without sRGB colour-space transformation ───
-  // new Image() / drawImage lets Chromium apply sRGB gamma correction,
-  // producing pixel values that don't match the raw RS screen pixels.
-  // fetch + createImageBitmap({colorSpaceConversion:'none'}) bypasses
-  // that transform — the same approach used by a1lib internally.
+  // colorSpaceConversion:'none' prevents Chromium from applying gamma
+  // correction, keeping pixel values identical to the raw PNG bytes.
   function loadRef(name, path) {
     return fetch(path)
       .then(function (r) { return r.blob(); })
@@ -60,45 +63,47 @@
         c.width  = bitmap.width;
         c.height = bitmap.height;
         c.getContext('2d').drawImage(bitmap, 0, 0);
-        refs[name]    = c.getContext('2d').getImageData(0, 0, c.width, c.height);
-        needles[name] = encodeNeedle(refs[name]);
+        refs[name] = c.getContext('2d').getImageData(0, 0, c.width, c.height);
         var d = refs[name].data;
         console.log('[VGT-haunt] Loaded "' + name + '" (' + refs[name].width + 'x' + refs[name].height + ')'
                   + ' | px0 RGBA(' + d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + ')');
       })
       .catch(function (e) {
         console.warn('[VGT-haunt] Could not load:', path, e);
-        refs[name]    = null;
-        needles[name] = null;
+        refs[name] = null;
       });
   }
 
-  // ── Capture + search ─────────────────────────────────────────────
-  // bindRegion(x, y, w, h) — captures a fresh screenshot into a handle
-  // bindFindSubImg(handle, bgrBase64, needleW, sx, sy, sw, sh) → JSON [{x,y}]
-  var handle = 0;
-
-  function capture() {
+  // ── Capture ───────────────────────────────────────────────────────
+  function captureScreen() {
+    var l = resolveLib();
+    if (!l) return false;
     try {
-      handle = alt1.bindRegion(0, 0, alt1.rsWidth, alt1.rsHeight);
-      return handle > 0;
+      screen = l.captureHoldFullRs();
+      return screen != null;
     } catch (e) {
-      console.warn('[VGT-haunt] bindRegion error:', e);
+      console.warn('[VGT-haunt] captureHoldFullRs error:', e);
       return false;
     }
   }
 
+  // ── Search ────────────────────────────────────────────────────────
+  // ImgRef.findSubimage(needle: ImageData) → {x,y}[]
+  // A1lib.findSubimage(haystack: ImgRef, needle: ImageData) → {x,y}[]
   function imageFound(name) {
-    if (!needles[name] || handle <= 0) return false;
+    if (!refs[name] || !screen) return false;
     try {
-      var nw = refs[name].width;
-      var r  = alt1.bindFindSubImg(handle, needles[name], nw,
-                                   0, 0, alt1.rsWidth, alt1.rsHeight);
-      if (!r) return false;
-      var hits = JSON.parse(r);
+      var hits;
+      if (typeof screen.findSubimage === 'function') {
+        hits = screen.findSubimage(refs[name]);
+      } else if (typeof lib.findSubimage === 'function') {
+        hits = lib.findSubimage(screen, refs[name]);
+      } else {
+        return false;
+      }
       return Array.isArray(hits) && hits.length > 0;
     } catch (e) {
-      console.warn('[VGT-haunt] bindFindSubImg("' + name + '") error:', e);
+      console.warn('[VGT-haunt] findSubimage("' + name + '") error:', e);
       return false;
     }
   }
@@ -120,7 +125,16 @@
       return;
     }
 
-    if (!capture()) return;
+    if (!captureScreen()) {
+      if (tick % 5 === 1) console.log('[VGT-haunt] captureScreen failed');
+      return;
+    }
+
+    // One-time: log what captureHoldFullRs returned so we can verify
+    if (tick === 1) {
+      console.log('[VGT-haunt] screen type:', typeof screen,
+                  '| keys:', Object.keys(screen || {}).join(', '));
+    }
 
     if (tick % 10 === 1) {
       console.log('[VGT-haunt] Scan #' + tick + ' — RS ' + alt1.rsWidth + 'x' + alt1.rsHeight);
@@ -143,7 +157,14 @@
 
   // ── Init ──────────────────────────────────────────────────────────
   function init() {
-    console.log('[VGT-haunt] Starting up (v1.6)...');
+    console.log('[VGT-haunt] Starting up (v1.7)...');
+
+    // Log A1lib API surface once for diagnostics
+    if (typeof A1lib !== 'undefined') {
+      console.log('[VGT-haunt] A1lib keys:', Object.keys(A1lib).join(', '));
+    } else {
+      console.warn('[VGT-haunt] A1lib not found — will check a1lib at capture time');
+    }
 
     Promise.all([
       loadRef('zemouregal',   './src/img/zemouregal.png'),
@@ -153,6 +174,12 @@
     ]).then(function () {
       var ok = Object.keys(refs).filter(function (n) { return refs[n] !== null; }).length;
       console.log('[VGT-haunt] ' + ok + '/4 images loaded. Scanning every ' + SCAN_MS + 'ms.');
+
+      if (!resolveLib()) {
+        console.error('[VGT-haunt] No capture library available — A1lib / a1lib both missing.');
+        return;
+      }
+
       setInterval(scan, SCAN_MS);
     });
   }
