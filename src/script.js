@@ -153,9 +153,10 @@ function updateStatus(queue) {
     setCard(alertCard, 'turn');
     alertIcon.textContent  = '🐉';
     alertTitle.textContent = "It's your turn!";
-    alertSub.textContent   = currentWorld
+    alertSub.innerHTML     = (currentWorld
       ? 'Head to Vorkath on World: ' + currentWorld + ' now!'
-      : 'Head to Vorkath now!';
+      : 'Head to Vorkath now!')
+      + '<br>Please be at the statue ready to fight Vorkath';
     if (!wasFirst) playAlert('turn');
     wasFirst      = true;
     wasInTopThree = true;
@@ -167,9 +168,10 @@ function updateStatus(queue) {
     setCard(alertCard, 'soon');
     alertIcon.textContent  = '⚠️';
     alertTitle.textContent = 'Get ready!';
-    alertSub.textContent   = currentWorld
+    alertSub.innerHTML     = (currentWorld
       ? 'You are #' + rank + ' — head to World: ' + currentWorld + ' please'
-      : 'You are #' + rank + ' — up soon';
+      : 'You are #' + rank + ' — up soon')
+      + '<br>Please be at the statue ready to fight Vorkath';
     if (!wasInTopThree) playAlert('soon');
     wasInTopThree = true;
     wasFirst      = false;
