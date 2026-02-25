@@ -13,7 +13,7 @@ const SHEET_NAME  = 'List';
 const REFRESH_MS  = 5_000;    // auto-refresh interval (5 s)
 
 const GAS_URL = 'https://script.google.com/macros/s/' +
-                'AKfycbyT7Eb1Eunmrfh6aILvLx5szMpIdz0zB1f_FQR3Frz_HYXfD4dv_KAXjT3AkTqdzhD1Sg' +
+                'AKfycbxSYj9hystM_Kxpn4tAx6NSFFWa2mL26iA9oISfq-8AC-jSIq3sCD1msVMisimn8_9Yvg' +
                 '/exec';
 
 const HEARTBEAT_MS         = 15_000;  // send heartbeat every 15 s
@@ -262,6 +262,8 @@ function updateQueueList(queue) {
     var dotTitle = online ? 'Online — plugin active' : 'Offline — plugin not detected';
 
     var adminBtns = '';
+    var dragHandle = '';
+    var nameClass = 'vgt-queue-name';
     if (calibrated) {
       adminBtns =
         '<span class="vgt-admin-actions">' +
@@ -269,13 +271,16 @@ function updateQueueList(queue) {
           '<button class="vgt-admin-action skip" data-action="adminSkip" data-name="' + escapeHtml(n) + '" title="Mark Skip">\u2717</button>' +
           '<button class="vgt-admin-action ping" data-action="ping" data-name="' + escapeHtml(n) + '" title="Ping Player">\u266A</button>' +
         '</span>';
+      dragHandle = '<span class="vgt-drag-handle" title="Drag to reorder">\u2261</span>';
+      nameClass += ' editable';
     }
 
     html +=
-      '<div class="' + cls + '">' +
+      '<div class="' + cls + '"' + (calibrated ? ' draggable="true" data-index="' + i + '"' : '') + '>' +
+        dragHandle +
         '<span class="vgt-queue-rank">#' + rank + '</span>' +
         '<span class="' + dotClass + '" title="' + dotTitle + '"></span>' +
-        '<span class="vgt-queue-name">' + escapeHtml(n) + youTag + '</span>' +
+        '<span class="' + nameClass + '" data-original="' + escapeHtml(n) + '">' + escapeHtml(n) + youTag + '</span>' +
         badge +
         adminBtns +
       '</div>';
@@ -768,14 +773,126 @@ function init() {
   });
 
   // ── Queue action delegation (single listener) ──────────────────
-  document.getElementById('queue-list').addEventListener('click', function(e) {
+  var queueListEl = document.getElementById('queue-list');
+
+  queueListEl.addEventListener('click', function(e) {
     if (!calibrated) return;
+
+    // Admin action buttons
     var btn = e.target.closest('.vgt-admin-action');
-    if (!btn || btn.disabled) return;
-    var action = btn.getAttribute('data-action');
-    var name   = btn.getAttribute('data-name');
-    if (action && name) {
-      runAction(action, name, btn);
+    if (btn && !btn.disabled) {
+      var action = btn.getAttribute('data-action');
+      var name   = btn.getAttribute('data-name');
+      if (action && name) runAction(action, name, btn);
+      return;
+    }
+
+    // Inline name editing
+    var nameEl = e.target.closest('.vgt-queue-name.editable');
+    if (nameEl && !nameEl.classList.contains('editing')) {
+      var original = nameEl.getAttribute('data-original');
+      nameEl.classList.add('editing');
+      nameEl.innerHTML = '<input class="vgt-queue-name-input" type="text" value="' + escapeHtml(original) + '" />';
+      var input = nameEl.querySelector('input');
+      input.focus();
+      input.select();
+
+      function saveEdit() {
+        var newName = input.value.trim();
+        if (newName && newName !== original) {
+          nameEl.innerHTML = escapeHtml(newName);
+          nameEl.classList.remove('editing');
+          fetch(GAS_URL + '?action=editName&oldName=' + encodeURIComponent(original) + '&newName=' + encodeURIComponent(newName), { cache: 'no-store' })
+            .then(function() { setTimeout(refresh, 1500); })
+            .catch(function(err) { console.warn('[VGT] Edit failed:', err); });
+        } else {
+          nameEl.innerHTML = escapeHtml(original);
+          nameEl.classList.remove('editing');
+        }
+      }
+
+      input.addEventListener('blur', saveEdit);
+      input.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+        if (ev.key === 'Escape') {
+          input.removeEventListener('blur', saveEdit);
+          nameEl.innerHTML = escapeHtml(original);
+          nameEl.classList.remove('editing');
+        }
+      });
+    }
+  });
+
+  // ── Drag-and-drop reorder ──────────────────────────────────────
+  var dragSourceIndex = null;
+
+  queueListEl.addEventListener('dragstart', function(e) {
+    if (!calibrated) return;
+    var item = e.target.closest('.vgt-queue-item');
+    if (!item) return;
+    // Only allow drag from the handle
+    if (!e.target.closest('.vgt-drag-handle')) { e.preventDefault(); return; }
+    dragSourceIndex = parseInt(item.getAttribute('data-index'), 10);
+    item.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragSourceIndex);
+  });
+
+  queueListEl.addEventListener('dragover', function(e) {
+    if (!calibrated || dragSourceIndex === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    var item = e.target.closest('.vgt-queue-item');
+    if (!item) return;
+    // Clear all drag-over classes
+    var items = queueListEl.querySelectorAll('.vgt-queue-item');
+    for (var i = 0; i < items.length; i++) items[i].classList.remove('drag-over');
+    item.classList.add('drag-over');
+  });
+
+  queueListEl.addEventListener('dragleave', function(e) {
+    var item = e.target.closest('.vgt-queue-item');
+    if (item) item.classList.remove('drag-over');
+  });
+
+  queueListEl.addEventListener('drop', function(e) {
+    if (!calibrated || dragSourceIndex === null) return;
+    e.preventDefault();
+    var item = e.target.closest('.vgt-queue-item');
+    if (!item) return;
+    var targetIndex = parseInt(item.getAttribute('data-index'), 10);
+
+    // Clean up classes
+    var items = queueListEl.querySelectorAll('.vgt-queue-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('dragging', 'drag-over');
+    }
+
+    if (targetIndex === dragSourceIndex || isNaN(targetIndex)) {
+      dragSourceIndex = null;
+      return;
+    }
+
+    var movedName = queueData[dragSourceIndex];
+
+    // Optimistically reorder
+    queueData.splice(dragSourceIndex, 1);
+    queueData.splice(targetIndex, 0, movedName);
+    updateQueueList(queueData);
+
+    // Send to GAS
+    fetch(GAS_URL + '?action=moveQueue&name=' + encodeURIComponent(movedName) + '&toIndex=' + targetIndex, { cache: 'no-store' })
+      .then(function() { setTimeout(refresh, 2000); })
+      .catch(function(err) { console.warn('[VGT] Move failed:', err); });
+
+    dragSourceIndex = null;
+  });
+
+  queueListEl.addEventListener('dragend', function() {
+    dragSourceIndex = null;
+    var items = queueListEl.querySelectorAll('.vgt-queue-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('dragging', 'drag-over');
     }
   });
 
