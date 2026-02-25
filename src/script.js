@@ -262,7 +262,7 @@ function updateQueueList(queue) {
     var dotTitle = online ? 'Online — plugin active' : 'Offline — plugin not detected';
 
     var adminBtns = '';
-    var dragHandle = '';
+    var moveButtons = '';
     var nameClass = 'vgt-queue-name';
     if (calibrated) {
       adminBtns =
@@ -271,13 +271,17 @@ function updateQueueList(queue) {
           '<button class="vgt-admin-action skip" data-action="adminSkip" data-name="' + escapeHtml(n) + '" title="Mark Skip">\u2717</button>' +
           '<button class="vgt-admin-action ping" data-action="ping" data-name="' + escapeHtml(n) + '" title="Ping Player">\u266A</button>' +
         '</span>';
-      dragHandle = '<span class="vgt-drag-handle" title="Drag to reorder">\u2261</span>';
+      moveButtons =
+        '<span class="vgt-move-btns">' +
+          '<button class="vgt-move-btn" data-dir="up" data-index="' + i + '" data-name="' + escapeHtml(n) + '"' + (i === 0 ? ' disabled' : '') + ' title="Move up">\u25B2</button>' +
+          '<button class="vgt-move-btn" data-dir="down" data-index="' + i + '" data-name="' + escapeHtml(n) + '"' + (i === queue.length - 1 ? ' disabled' : '') + ' title="Move down">\u25BC</button>' +
+        '</span>';
       nameClass += ' editable';
     }
 
     html +=
-      '<div class="' + cls + '"' + (calibrated ? ' draggable="true" data-index="' + i + '"' : '') + '>' +
-        dragHandle +
+      '<div class="' + cls + '" data-index="' + i + '">' +
+        moveButtons +
         '<span class="vgt-queue-rank">#' + rank + '</span>' +
         '<span class="' + dotClass + '" title="' + dotTitle + '"></span>' +
         '<span class="' + nameClass + '" data-original="' + escapeHtml(n) + '">' + escapeHtml(n) + youTag + '</span>' +
@@ -823,77 +827,27 @@ function init() {
     }
   });
 
-  // ── Drag-and-drop reorder ──────────────────────────────────────
-  var dragSourceIndex = null;
+  // ── Move up/down buttons ────────────────────────────────────────
+  queueListEl.addEventListener('click', function(e) {
+    var moveBtn = e.target.closest('.vgt-move-btn');
+    if (!moveBtn || !calibrated || moveBtn.disabled) return;
 
-  queueListEl.addEventListener('dragstart', function(e) {
-    if (!calibrated) return;
-    var item = e.target.closest('.vgt-queue-item');
-    if (!item) return;
-    // Only allow drag from the handle
-    if (!e.target.closest('.vgt-drag-handle')) { e.preventDefault(); return; }
-    dragSourceIndex = parseInt(item.getAttribute('data-index'), 10);
-    item.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', dragSourceIndex);
-  });
+    var fromIndex = parseInt(moveBtn.getAttribute('data-index'), 10);
+    var dir = moveBtn.getAttribute('data-dir');
+    var toIndex = dir === 'up' ? fromIndex - 1 : fromIndex + 1;
+    var movedName = moveBtn.getAttribute('data-name');
 
-  queueListEl.addEventListener('dragover', function(e) {
-    if (!calibrated || dragSourceIndex === null) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    var item = e.target.closest('.vgt-queue-item');
-    if (!item) return;
-    // Clear all drag-over classes
-    var items = queueListEl.querySelectorAll('.vgt-queue-item');
-    for (var i = 0; i < items.length; i++) items[i].classList.remove('drag-over');
-    item.classList.add('drag-over');
-  });
-
-  queueListEl.addEventListener('dragleave', function(e) {
-    var item = e.target.closest('.vgt-queue-item');
-    if (item) item.classList.remove('drag-over');
-  });
-
-  queueListEl.addEventListener('drop', function(e) {
-    if (!calibrated || dragSourceIndex === null) return;
-    e.preventDefault();
-    var item = e.target.closest('.vgt-queue-item');
-    if (!item) return;
-    var targetIndex = parseInt(item.getAttribute('data-index'), 10);
-
-    // Clean up classes
-    var items = queueListEl.querySelectorAll('.vgt-queue-item');
-    for (var i = 0; i < items.length; i++) {
-      items[i].classList.remove('dragging', 'drag-over');
-    }
-
-    if (targetIndex === dragSourceIndex || isNaN(targetIndex)) {
-      dragSourceIndex = null;
-      return;
-    }
-
-    var movedName = queueData[dragSourceIndex];
+    if (toIndex < 0 || toIndex >= queueData.length) return;
 
     // Optimistically reorder
-    queueData.splice(dragSourceIndex, 1);
-    queueData.splice(targetIndex, 0, movedName);
+    queueData.splice(fromIndex, 1);
+    queueData.splice(toIndex, 0, movedName);
     updateQueueList(queueData);
 
     // Send to GAS
-    fetch(GAS_URL + '?action=moveQueue&name=' + encodeURIComponent(movedName) + '&toIndex=' + targetIndex, { cache: 'no-store' })
+    fetch(GAS_URL + '?action=moveQueue&name=' + encodeURIComponent(movedName) + '&toIndex=' + toIndex, { cache: 'no-store' })
       .then(function() { setTimeout(refresh, 2000); })
       .catch(function(err) { console.warn('[VGT] Move failed:', err); });
-
-    dragSourceIndex = null;
-  });
-
-  queueListEl.addEventListener('dragend', function() {
-    dragSourceIndex = null;
-    var items = queueListEl.querySelectorAll('.vgt-queue-item');
-    for (var i = 0; i < items.length; i++) {
-      items[i].classList.remove('dragging', 'drag-over');
-    }
   });
 
   // ── Toggle open/closed button ─────────────────────────────────
