@@ -792,7 +792,7 @@ function init() {
     if (nameEl && !nameEl.classList.contains('editing')) {
       var original = nameEl.getAttribute('data-original');
       nameEl.classList.add('editing');
-      nameEl.innerHTML = '<input class="vgt-queue-name-input" type="text" value="' + escapeHtml(original) + '" />';
+      nameEl.innerHTML = '<input class="vgt-queue-name-input" type="text" value="' + escapeHtml(original) + '" autocomplete="off" autocorrect="off" data-lpignore="true" data-form-type="other" />';
       var input = nameEl.querySelector('input');
       input.focus();
       input.select();
