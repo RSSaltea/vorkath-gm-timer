@@ -18,7 +18,7 @@
     }
     .container {
       width: 100%;
-      max-width: 420px;
+      max-width: 380px;
       min-height: 380px;
       margin: 24px auto;
       background: #0f0f14;
@@ -35,28 +35,27 @@
       border-bottom: 1px solid #26263a;
       margin-bottom: 12px;
     }
-    .title {
-      font-size: 17px;
-      font-weight: 600;
-      color: #e6dcd0;
-    }
-    .stats {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex: 1;
-      margin-left: 12px;
-    }
     .stat {
+      flex: 1;
       font-size: 12px;
       color: #9aa0a6;
-      flex: 1;
+    }
+    .stat:first-child { text-align: left; }
+    .stat:last-child { text-align: right; }
+    .fc-center {
       text-align: center;
     }
     .fc-name {
-      font-size: 14px;
+      font-size: 20px;
       font-weight: 700;
-      color: #e6dcd0;
+      color: #4a9eff;
+      letter-spacing: 0.5px;
+      text-shadow: 0 1px 8px rgba(74,158,255,0.35);
+    }
+    .fc-world {
+      font-size: 11px;
+      color: #9aa0a6;
+      margin-top: 1px;
     }
 
     /* Hero card for #1 */
@@ -143,12 +142,12 @@
 <body>
   <div class="container">
     <div class="header">
-      <div class="title">Current Queue</div>
-      <div class="stats">
-        <span class="stat" id="stat-total">Total: —</span>
+      <span class="stat" id="stat-total">Total: —</span>
+      <div class="fc-center">
         <div class="fc-name">VorkathFC</div>
-        <span class="stat" id="stat-today">Today: —</span>
+        <div class="fc-world" id="fc-world"></div>
       </div>
+      <span class="stat" id="stat-today">Today: —</span>
     </div>
     <div id="hero-area"></div>
     <div class="list" id="list">
@@ -177,6 +176,18 @@
         document.getElementById('hero-area').innerHTML = '';
         document.getElementById('list').innerHTML = '<div class="loading">Failed to load.</div>';
       }
+    }
+
+    async function fetchWorld() {
+      try {
+        var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+                  '/gviz/tq?tqx=out:csv&sheet=Responses&range=F2';
+        var resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var text = await resp.text();
+        var world = text.replace(/"/g, '').trim();
+        document.getElementById('fc-world').textContent = world ? 'World: ' + world : '';
+      } catch (err) {}
     }
 
     async function fetchStats() {
@@ -235,8 +246,10 @@
 
     fetchQueue();
     fetchStats();
+    fetchWorld();
     setInterval(fetchQueue, 10000);
     setInterval(fetchStats, 10000);
+    setInterval(fetchWorld, 10000);
   </script>
 </body>
 </html>
