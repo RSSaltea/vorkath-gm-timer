@@ -47,16 +47,42 @@
       font-size: 12px;
       color: #9aa0a6;
     }
+
+    /* Hero card for #1 */
+    .hero {
+      background: rgba(76, 175, 80, 0.12);
+      border: 1px solid #4caf50;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .hero-icon {
+      font-size: 28px;
+      margin-bottom: 4px;
+    }
+    .hero-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #4caf50;
+      margin-bottom: 2px;
+    }
+    .hero-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: #dde1e7;
+    }
+    .hero-sub {
+      font-size: 11px;
+      color: #9aa0a6;
+      margin-top: 4px;
+    }
+
     .list {
       display: flex;
       flex-direction: column;
       gap: 3px;
-      max-height: calc(100vh - 150px);
-      overflow-y: auto;
     }
-    .list::-webkit-scrollbar { width: 6px; }
-    .list::-webkit-scrollbar-track { background: transparent; }
-    .list::-webkit-scrollbar-thumb { background: #26263a; border-radius: 3px; }
     .item {
       display: flex;
       align-items: center;
@@ -66,10 +92,6 @@
       border: 1px solid #1e1e2e;
       border-radius: 5px;
       font-size: 13px;
-    }
-    .item.first {
-      border-color: #4caf50;
-      background: rgba(76, 175, 80, 0.12);
     }
     .item.top3 {
       border-color: #3d2800;
@@ -81,7 +103,6 @@
       font-weight: 600;
       min-width: 26px;
     }
-    .item.first .item-rank { color: #4caf50; }
     .item.top3 .item-rank { color: #ff9800; }
     .item-name {
       flex: 1;
@@ -95,7 +116,6 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    .badge.turn { background: rgba(76,175,80,0.2); color: #4caf50; }
     .badge.soon { background: rgba(255,152,0,0.15); color: #ff9800; }
     .loading {
       text-align: center;
@@ -118,6 +138,7 @@
         <span class="stat" id="stat-today">Today: —</span>
       </div>
     </div>
+    <div id="hero-area"></div>
     <div class="list" id="list">
       <div class="loading">Loading queue...</div>
     </div>
@@ -141,6 +162,7 @@
           .filter(function(r) { return r.length > 0; });
         renderQueue(names);
       } catch (err) {
+        document.getElementById('hero-area').innerHTML = '';
         document.getElementById('list').innerHTML = '<div class="loading">Failed to load.</div>';
       }
     }
@@ -161,21 +183,38 @@
     }
 
     function renderQueue(names) {
+      var heroEl = document.getElementById('hero-area');
       var listEl = document.getElementById('list');
+
       if (names.length === 0) {
+        heroEl.innerHTML = '';
         listEl.innerHTML = '<div class="empty">The queue is empty.</div>';
         return;
       }
+
+      // Hero card for #1
+      heroEl.innerHTML =
+        '<div class="hero">' +
+          '<div class="hero-icon">\uD83D\uDC09</div>' +
+          '<div class="hero-title">It\'s their turn!</div>' +
+          '<div class="hero-name">' + escapeHtml(names[0]) + '</div>' +
+          '<div class="hero-sub">#1 in queue</div>' +
+        '</div>';
+
+      // #2 through #5
+      var top = Math.min(names.length, 5);
+      if (top <= 1) {
+        listEl.innerHTML = '';
+        return;
+      }
       var html = '';
-      for (var i = 0; i < names.length; i++) {
+      for (var i = 1; i < top; i++) {
         var rank = i + 1;
         var cls = 'item';
-        if (rank === 1) cls += ' first';
-        else if (rank <= 3) cls += ' top3';
+        if (rank <= 3) cls += ' top3';
 
         var badge = '';
-        if (rank === 1) badge = '<span class="badge turn">NOW</span>';
-        else if (rank <= 3) badge = '<span class="badge soon">SOON</span>';
+        if (rank <= 3) badge = '<span class="badge soon">SOON</span>';
 
         html += '<div class="' + cls + '"><span class="item-rank">#' + rank + '</span><span class="item-name">' + escapeHtml(names[i]) + '</span>' + badge + '</div>';
       }
