@@ -618,7 +618,7 @@ async function refresh() {
   var fetches = [fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats()];
   if (calibrated) {
     fetches.push(fetchSessionCount());
-    if (skippedPanelOpen) fetches.push(fetchSkipped());
+    fetches.push(fetchSkipped());
   }
   var results = await Promise.all(fetches);
   var queue   = results[0];
@@ -725,21 +725,46 @@ function toggleSkippedPanel(show) {
 
 // ── Join Queue ────────────────────────────────────────────────────
 
+var lastSubmittedName = '';
+var lastSubmitTime    = 0;
+
 async function joinQueue() {
   var name = getEffectiveName();
   if (!name) return;
 
   var btn = document.getElementById('join-queue-btn');
+
+  // Local guard: block rapid duplicate submissions of the same name
+  if (name.toLowerCase() === lastSubmittedName.toLowerCase() && Date.now() - lastSubmitTime < 30000) {
+    btn.textContent = 'Already submitted';
+    btn.disabled = true;
+    btn.classList.add('submitted');
+    setTimeout(function() {
+      btn.textContent = '+ Join Queue';
+      btn.disabled = false;
+      btn.classList.remove('submitted');
+    }, 3000);
+    return;
+  }
+
   btn.disabled    = true;
   btn.textContent = 'Submitting...';
 
   try {
     var resp = await fetch(GAS_URL + '?name=' + encodeURIComponent(name));
     var data = await resp.json();
-    btn.textContent = data.ok ? '✓ Joined queue!' : '✗ Failed — try again';
+    if (data.ok) {
+      btn.textContent = '\u2713 Joined queue!';
+      lastSubmittedName = name;
+      lastSubmitTime = Date.now();
+    } else if (data.error === 'duplicate') {
+      btn.textContent = 'Already in queue';
+    } else {
+      btn.textContent = '\u2717 Failed — try again';
+    }
   } catch (e) {
     console.warn('[VGT] Join queue error:', e);
-    btn.textContent = '✗ Error — try again';
+    btn.textContent = '\u2717 Error — try again';
   }
 
   btn.classList.add('submitted');
@@ -839,7 +864,6 @@ function init() {
       adminBtn.textContent = 'Admin';
       adminBtn.classList.remove('active');
       document.getElementById('session-controls').style.display = 'none';
-      document.getElementById('skipped-toggle-btn').style.display = 'none';
       toggleSkippedPanel(false);
       updateQueueList(queueData);
       return;
@@ -870,7 +894,7 @@ function init() {
       updateToggleOpenBtn();
       updateQueueList(queueData);
       document.getElementById('session-controls').style.display = 'flex';
-      document.getElementById('skipped-toggle-btn').style.display = '';
+      toggleSkippedPanel(true);
       fetchSessionCount();
       updateSessionDisplay();
     } else {
@@ -1058,15 +1082,6 @@ function init() {
     sessionActive = false;
     localStorage.setItem('vgt-session-active', 'false');
     updateSessionDisplay();
-  });
-
-  // ── Skipped panel toggle + close ─────────────────────────────────
-  document.getElementById('skipped-toggle-btn').addEventListener('click', function() {
-    toggleSkippedPanel();
-  });
-
-  document.getElementById('skipped-close-btn').addEventListener('click', function() {
-    toggleSkippedPanel(false);
   });
 
   // ── Unskip delegation ────────────────────────────────────────────
