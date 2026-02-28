@@ -1066,14 +1066,14 @@ body.browser-view .vgt-reminder-toggle {
 
 body.browser-view .vgt-layout {
   display: flex;
-  justify-content: center;
   align-items: flex-start;
   gap: 0;
-  width: 100%;
+  margin: 24px auto 0;
+  width: fit-content;
 }
 
 body.browser-view .vgt-layout .vgt-app {
-  margin-right: 0;
+  margin: 0;
   flex-shrink: 0;
 }
 
