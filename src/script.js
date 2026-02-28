@@ -438,14 +438,15 @@ async function fetchWorld() {
 
 async function fetchStats() {
   try {
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              '/gviz/tq?tqx=out:csv&sheet=Responses&range=D2:E2';
-    var resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var text = await resp.text();
-    var parts = text.replace(/"/g, '').split(',');
-    var today = (parts[0] || '').trim();
-    var total = (parts[1] || '').trim();
+    var results = await Promise.all([
+      fetch('https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+            '/gviz/tq?tqx=out:csv&sheet=Responses&range=E2', { cache: 'no-store' }),
+      fetch('https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+            '/gviz/tq?tqx=out:csv&sheet=Responses&range=G7', { cache: 'no-store' })
+    ]);
+    if (!results[0].ok || !results[1].ok) throw new Error('HTTP error');
+    var total = (await results[0].text()).replace(/"/g, '').trim();
+    var today = (await results[1].text()).replace(/"/g, '').trim();
     var elTotal = document.getElementById('info-total');
     var elToday = document.getElementById('info-today');
     if (elTotal) elTotal.textContent = 'Total: ' + (total || '—');
