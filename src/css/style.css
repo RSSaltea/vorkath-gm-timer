@@ -1069,12 +1069,13 @@ body.browser-view .vgt-layout {
   align-items: flex-start;
   gap: 0;
   margin: 24px auto 0;
-  width: fit-content;
+  max-width: max-content;
 }
 
 body.browser-view .vgt-layout .vgt-app {
   margin: 0;
   flex-shrink: 0;
+  width: 380px;
 }
 
 body.browser-view .vgt-app.panel-open {
