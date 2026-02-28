@@ -680,7 +680,7 @@ async function fetchSkipped() {
     var text = await resp.text();
     skippedData = text.split('\n')
       .map(function(r) { return r.replace(/^\"|\"$/g, '').trim(); })
-      .filter(function(r) { return r.length > 0 && r !== 'name'; });
+      .filter(function(r) { return r.length > 0 && r !== 'name' && r.toLowerCase().indexOf('runescape') === -1; });
     renderSkippedPanel();
   } catch (err) {
     console.warn('[VGT] Skipped fetch failed:', err);
