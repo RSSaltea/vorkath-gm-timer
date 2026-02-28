@@ -1069,10 +1069,12 @@ body.browser-view .vgt-layout {
   justify-content: center;
   align-items: flex-start;
   gap: 0;
+  width: 100%;
 }
 
 body.browser-view .vgt-layout .vgt-app {
   margin-right: 0;
+  flex-shrink: 0;
 }
 
 body.browser-view .vgt-app.panel-open {
