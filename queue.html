@@ -236,10 +236,7 @@
         var cls = 'item';
         if (rank <= 3) cls += ' top3';
 
-        var badge = '';
-        if (rank <= 3) badge = '<span class="badge soon">SOON</span>';
-
-        html += '<div class="' + cls + '"><span class="item-rank">#' + rank + '</span><span class="item-name">' + escapeHtml(names[i]) + '</span>' + badge + '</div>';
+        html += '<div class="' + cls + '"><span class="item-rank">#' + rank + '</span><span class="item-name">' + escapeHtml(names[i]) + '</span></div>';
       }
       listEl.innerHTML = html;
     }
