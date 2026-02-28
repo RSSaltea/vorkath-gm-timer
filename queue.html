@@ -65,26 +65,26 @@
     .hero {
       background: rgba(76, 175, 80, 0.12);
       border: 1px solid #4caf50;
-      border-radius: 8px;
-      padding: 12px 16px;
-      text-align: center;
-      margin-bottom: 8px;
+      border-radius: 5px;
+      padding: 10px 14px;
+      margin-bottom: 3px;
     }
-    .hero-title {
-      font-size: 27px;
-      font-weight: 700;
+    .hero {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hero-rank {
+      font-size: 15px;
       color: #4caf50;
-      margin-bottom: 2px;
+      font-weight: 600;
+      min-width: 26px;
     }
     .hero-name {
-      font-size: 33px;
+      flex: 1;
+      font-size: 23px;
       font-weight: 600;
       color: #dde1e7;
-    }
-    .hero-sub {
-      font-size: 20px;
-      color: #9aa0a6;
-      margin-top: 4px;
     }
 
     .list {
@@ -219,9 +219,8 @@
       // Hero card for #1
       heroEl.innerHTML =
         '<div class="hero">' +
-          '<div class="hero-title">It\'s their turn!</div>' +
-          '<div class="hero-name">' + escapeHtml(names[0]) + '</div>' +
-          '<div class="hero-sub">#1 in queue</div>' +
+          '<span class="hero-rank">#1</span>' +
+          '<span class="hero-name">' + escapeHtml(names[0]) + '</span>' +
         '</div>';
 
       // #2 through #5
