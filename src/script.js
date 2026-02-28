@@ -13,7 +13,7 @@ const SHEET_NAME  = 'List';
 const REFRESH_MS  = 5_000;    // auto-refresh interval (5 s)
 
 const GAS_URL = 'https://script.google.com/macros/s/' +
-                'AKfycbxSYj9hystM_Kxpn4tAx6NSFFWa2mL26iA9oISfq-8AC-jSIq3sCD1msVMisimn8_9Yvg' +
+                'AKfycbxEO8G6_n4zZYjvsPo392a5sam2spGbalidcfjqSs0dZ3TsYbmHKd8EpDBljWWx19c_GA' +
                 '/exec';
 
 const HEARTBEAT_MS         = 15_000;  // send heartbeat every 15 s
@@ -32,6 +32,10 @@ let calibrated      = false;
 let configSeed      = null;
 let lastPingCheck   = new Date().toISOString();
 let completedData   = [];     // names marked "done" in Responses!C
+let sessionActive   = localStorage.getItem('vgt-session-active') === 'true';
+let sessionKillCount = 0;
+let skippedData     = [];      // last 20 skipped players
+let skippedPanelOpen = false;
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -535,13 +539,20 @@ async function runAction(action, name, btnEl) {
   btnEl.disabled = true;
 
   try {
-    var resp = await fetch(
-      GAS_URL + '?action=' + action + '&name=' + encodeURIComponent(name),
-      { cache: 'no-store' }
-    );
+    var actionUrl = GAS_URL + '?action=' + action + '&name=' + encodeURIComponent(name);
+    // If marking done during an active session, tell GAS to increment the kill counter
+    if (action === 'adminDone' && sessionActive) {
+      actionUrl += '&sessionIncrement=true';
+    }
+    var resp = await fetch(actionUrl, { cache: 'no-store' });
     var data = await resp.json();
     if (data.ok) {
       btnEl.textContent = '\u2713';
+      // Optimistically increment local kill count
+      if (action === 'adminDone' && sessionActive) {
+        sessionKillCount++;
+        updateSessionDisplay();
+      }
       setTimeout(refresh, 1500);
     } else {
       btnEl.textContent = '!';
@@ -604,7 +615,12 @@ function isOnline(name) {
 async function refresh() {
   setDot('loading');
 
-  var results = await Promise.all([fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats()]);
+  var fetches = [fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats()];
+  if (calibrated) {
+    fetches.push(fetchSessionCount());
+    if (skippedPanelOpen) fetches.push(fetchSkipped());
+  }
+  var results = await Promise.all(fetches);
   var queue   = results[0];
 
   if (queue) {
@@ -616,6 +632,95 @@ async function refresh() {
   updateStatus(queue);
   updateQueueList(queue);
   updateTimestamp();
+}
+
+// ── Session Tracking ─────────────────────────────────────────────
+
+async function fetchSessionCount() {
+  try {
+    var url = sheetUrl("'Responses'!G7");
+    var resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) return;
+    var text = await resp.text();
+    var val = text.replace(/"/g, '').trim();
+    sessionKillCount = parseInt(val, 10) || 0;
+    updateSessionDisplay();
+  } catch (err) {
+    console.warn('[VGT] Session count fetch failed:', err);
+  }
+}
+
+function updateSessionDisplay() {
+  var countEl = document.getElementById('session-count');
+  var startBtn = document.getElementById('session-start-btn');
+  var endBtn = document.getElementById('session-end-btn');
+  if (!countEl) return;
+
+  countEl.textContent = 'Kills: ' + sessionKillCount;
+  if (sessionActive) {
+    countEl.classList.add('active');
+    startBtn.style.display = 'none';
+    endBtn.style.display = '';
+  } else {
+    countEl.classList.remove('active');
+    startBtn.style.display = '';
+    endBtn.style.display = 'none';
+  }
+}
+
+// ── Skipped Players ──────────────────────────────────────────────
+
+async function fetchSkipped() {
+  try {
+    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+              '/gviz/tq?tqx=out:csv&sheet=Responses&tq=' +
+              encodeURIComponent("SELECT B WHERE E=TRUE ORDER BY A DESC LIMIT 20");
+    var resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) return;
+    var text = await resp.text();
+    skippedData = text.split('\n')
+      .map(function(r) { return r.replace(/^\"|\"$/g, '').trim(); })
+      .filter(function(r) { return r.length > 0 && r !== 'name'; });
+    renderSkippedPanel();
+  } catch (err) {
+    console.warn('[VGT] Skipped fetch failed:', err);
+  }
+}
+
+function renderSkippedPanel() {
+  var listEl = document.getElementById('skipped-list');
+  if (!listEl) return;
+
+  if (skippedData.length === 0) {
+    listEl.innerHTML = '<div class="vgt-skipped-empty">No skipped players</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < skippedData.length; i++) {
+    html += '<div class="vgt-skipped-item">' +
+      '<span class="vgt-skipped-name">' + escapeHtml(skippedData[i]) + '</span>' +
+      '<button class="vgt-unskip-btn" data-name="' + escapeHtml(skippedData[i]) + '">Unskip</button>' +
+      '</div>';
+  }
+  listEl.innerHTML = html;
+}
+
+function toggleSkippedPanel(show) {
+  var panel = document.getElementById('skipped-panel');
+  var app = document.querySelector('.vgt-app');
+  if (!panel || !app) return;
+
+  skippedPanelOpen = typeof show === 'boolean' ? show : !skippedPanelOpen;
+
+  if (skippedPanelOpen) {
+    panel.style.display = 'flex';
+    app.classList.add('panel-open');
+    fetchSkipped();
+  } else {
+    panel.style.display = 'none';
+    app.classList.remove('panel-open');
+  }
 }
 
 // ── Join Queue ────────────────────────────────────────────────────
@@ -733,6 +838,9 @@ function init() {
       calibrated = false;
       adminBtn.textContent = 'Admin';
       adminBtn.classList.remove('active');
+      document.getElementById('session-controls').style.display = 'none';
+      document.getElementById('skipped-toggle-btn').style.display = 'none';
+      toggleSkippedPanel(false);
       updateQueueList(queueData);
       return;
     }
@@ -761,6 +869,10 @@ function init() {
       adminBtn.classList.add('active');
       updateToggleOpenBtn();
       updateQueueList(queueData);
+      document.getElementById('session-controls').style.display = 'flex';
+      document.getElementById('skipped-toggle-btn').style.display = '';
+      fetchSessionCount();
+      updateSessionDisplay();
     } else {
       adminError.textContent = 'Invalid key';
       adminError.style.display = 'block';
@@ -791,36 +903,69 @@ function init() {
       return;
     }
 
-    // Inline name editing
+    // Inline name editing (DOM-based with debounced blur to prevent password-manager interference)
     var nameEl = e.target.closest('.vgt-queue-name.editable');
     if (nameEl && !nameEl.classList.contains('editing')) {
       var original = nameEl.getAttribute('data-original');
       nameEl.classList.add('editing');
-      nameEl.innerHTML = '<input class="vgt-queue-name-input" type="text" value="' + escapeHtml(original) + '" autocomplete="off" autocorrect="off" data-lpignore="true" data-form-type="other" />';
-      var input = nameEl.querySelector('input');
+
+      // Build input via DOM (not innerHTML) to avoid browser autofill scanning
+      var input = document.createElement('input');
+      input.className = 'vgt-queue-name-input';
+      input.type = 'text';
+      input.value = original;
+      input.setAttribute('autocomplete', 'off');
+      input.setAttribute('autocorrect', 'off');
+      input.setAttribute('autocapitalize', 'off');
+      input.setAttribute('spellcheck', 'false');
+      input.setAttribute('data-lpignore', 'true');
+      input.setAttribute('data-1p-ignore', 'true');
+      input.setAttribute('data-bwignore', 'true');
+      input.setAttribute('data-protonpass-ignore', 'true');
+      input.setAttribute('data-form-type', 'other');
+      input.setAttribute('role', 'presentation');
+      input.setAttribute('name', 'vgt-edit-' + Date.now());
+
+      nameEl.textContent = '';
+      nameEl.appendChild(input);
       input.focus();
       input.select();
 
+      var saved = false;
+      var blurTimeout = null;
+
       function saveEdit() {
+        if (saved) return;
+        saved = true;
+        if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
         var newName = input.value.trim();
         if (newName && newName !== original) {
-          nameEl.innerHTML = escapeHtml(newName);
+          nameEl.textContent = newName;
           nameEl.classList.remove('editing');
           fetch(GAS_URL + '?action=editName&oldName=' + encodeURIComponent(original) + '&newName=' + encodeURIComponent(newName), { cache: 'no-store' })
             .then(function() { setTimeout(refresh, 1500); })
             .catch(function(err) { console.warn('[VGT] Edit failed:', err); });
         } else {
-          nameEl.innerHTML = escapeHtml(original);
+          nameEl.textContent = original;
           nameEl.classList.remove('editing');
         }
       }
 
-      input.addEventListener('blur', saveEdit);
+      input.addEventListener('blur', function() {
+        // Debounce blur — if input regains focus within 150ms, cancel the save
+        blurTimeout = setTimeout(saveEdit, 150);
+      });
+
+      input.addEventListener('focus', function() {
+        if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+      });
+
       input.addEventListener('keydown', function(ev) {
-        if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+        if (ev.key === 'Enter') { ev.preventDefault(); saveEdit(); }
         if (ev.key === 'Escape') {
-          input.removeEventListener('blur', saveEdit);
-          nameEl.innerHTML = escapeHtml(original);
+          saved = true;
+          if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+          nameEl.textContent = original;
           nameEl.classList.remove('editing');
         }
       });
@@ -891,6 +1036,57 @@ function init() {
     input.value = name;
     renderCompletedList(name);
     this.style.display = 'none';
+  });
+
+  // ── Session Start / End buttons ──────────────────────────────────
+  document.getElementById('session-start-btn').addEventListener('click', async function() {
+    if (!calibrated) return;
+    this.disabled = true;
+    try {
+      await fetch(GAS_URL + '?action=sessionStart', { cache: 'no-store' });
+      sessionActive = true;
+      sessionKillCount = 0;
+      localStorage.setItem('vgt-session-active', 'true');
+      updateSessionDisplay();
+    } catch (err) {
+      console.warn('[VGT] Session start failed:', err);
+    }
+    this.disabled = false;
+  });
+
+  document.getElementById('session-end-btn').addEventListener('click', function() {
+    sessionActive = false;
+    localStorage.setItem('vgt-session-active', 'false');
+    updateSessionDisplay();
+  });
+
+  // ── Skipped panel toggle + close ─────────────────────────────────
+  document.getElementById('skipped-toggle-btn').addEventListener('click', function() {
+    toggleSkippedPanel();
+  });
+
+  document.getElementById('skipped-close-btn').addEventListener('click', function() {
+    toggleSkippedPanel(false);
+  });
+
+  // ── Unskip delegation ────────────────────────────────────────────
+  document.getElementById('skipped-list').addEventListener('click', async function(e) {
+    var btn = e.target.closest('.vgt-unskip-btn');
+    if (!btn || !calibrated) return;
+    var name = btn.getAttribute('data-name');
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+      await fetch(GAS_URL + '?action=unskipPlayer&name=' + encodeURIComponent(name), { cache: 'no-store' });
+      // Remove from local data and re-render
+      skippedData = skippedData.filter(function(n) { return n !== name; });
+      renderSkippedPanel();
+      setTimeout(refresh, 1500);
+    } catch (err) {
+      console.warn('[VGT] Unskip failed:', err);
+      btn.disabled = false;
+      btn.textContent = 'Unskip';
+    }
   });
 }
 

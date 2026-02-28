@@ -18,6 +18,7 @@
 </head>
 <body class="nis">
 
+  <div class="vgt-layout">
   <div class="vgt-app">
 
     <!-- Header -->
@@ -81,7 +82,13 @@
 
       <div class="vgt-queue-header">
         <div class="vgt-label">Current Queue</div>
+        <div class="vgt-session-controls" id="session-controls" style="display:none;">
+          <span class="vgt-session-count" id="session-count">Kills: 0</span>
+          <button class="vgt-session-btn start" id="session-start-btn">Start</button>
+          <button class="vgt-session-btn end" id="session-end-btn" style="display:none;">End</button>
+        </div>
         <button class="vgt-toggle-open-btn" id="toggle-open-btn" style="display:none;">Closed</button>
+        <button class="vgt-skipped-toggle-btn" id="skipped-toggle-btn" style="display:none;">Skipped</button>
         <button class="vgt-refresh-btn" id="refresh-btn-queue">↻ Refresh</button>
       </div>
 
@@ -169,7 +176,18 @@
 
   </div>
 
-  <script src="./src/script.js?v=3.22"></script>
+  <!-- Skipped players side panel -->
+  <div class="vgt-skipped-panel" id="skipped-panel" style="display:none;">
+    <div class="vgt-skipped-header">
+      <span>Skipped</span>
+      <button class="vgt-skipped-close" id="skipped-close-btn">&times;</button>
+    </div>
+    <div class="vgt-skipped-list normalscroll" id="skipped-list"></div>
+  </div>
+
+  </div>
+
+  <script src="./src/script.js?v=3.23"></script>
   <script src="./src/haunt-detector.js?v=2.2"></script>
   <script src="./src/chat-reader.js?v=2.7"></script>
 </body>
