@@ -35,27 +35,29 @@
       border-bottom: 1px solid #26263a;
       margin-bottom: 12px;
     }
+    .stats {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
     .stat {
-      flex: 1;
-      font-size: 17px;
+      font-size: 16px;
       color: #9aa0a6;
     }
-    .stat:first-child { text-align: left; }
-    .stat:last-child { text-align: right; }
     .fc-center {
       text-align: center;
     }
     .fc-name {
-      font-size: 25px;
+      font-size: 22px;
       font-weight: 700;
       color: #4a9eff;
       letter-spacing: 0.5px;
       text-shadow: 0 1px 8px rgba(74,158,255,0.35);
     }
     .fc-world {
-      font-size: 15px;
+      font-size: 16px;
       color: #9aa0a6;
-      margin-top: 1px;
     }
 
     /* Hero card for #1 */
@@ -142,12 +144,14 @@
 <body>
   <div class="container">
     <div class="header">
-      <span class="stat" id="stat-total">Total: —</span>
+      <div class="fc-world" id="fc-world"></div>
       <div class="fc-center">
         <div class="fc-name">VorkathFC</div>
-        <div class="fc-world" id="fc-world"></div>
       </div>
-      <span class="stat" id="stat-today">Today: —</span>
+      <div class="stats">
+        <span class="stat" id="stat-total">Total: —</span>
+        <span class="stat" id="stat-today">Today: —</span>
+      </div>
     </div>
     <div id="hero-area"></div>
     <div class="list" id="list">
