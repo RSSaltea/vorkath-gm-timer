@@ -1074,10 +1074,11 @@ body.browser-view .vgt-reminder-toggle {
 
 body.browser-view .vgt-layout {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 0;
   margin: 24px auto 0;
   max-width: max-content;
+  min-height: calc(100vh - 48px);
 }
 
 body.browser-view .vgt-layout .vgt-app {
@@ -1160,9 +1161,7 @@ body.browser-view .vgt-app.panel-open {
 }
 
 body.browser-view .vgt-skipped-panel {
-  margin-top: 24px;
-  min-height: calc(100vh - 48px);
-  max-height: calc(100vh - 48px);
+  margin-top: 0;
 }
 
 .vgt-skipped-header {
