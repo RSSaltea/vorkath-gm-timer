@@ -196,11 +196,6 @@
         </ul>
       </div>
 
-      <button class="vgt-info-btn vgt-info-btn--yt"
-              onclick="window.open('https://www.youtube.com/watch?v=Ds8aovPQ48I','_blank')">
-        ▶&nbsp; Example Kill
-      </button>
-
       <button class="vgt-info-btn vgt-info-btn--discord"
               onclick="window.open('https://discord.gg/vorkath','_blank')">
         <svg class="vgt-discord-icon" viewBox="0 0 24 24" fill="currentColor">
@@ -231,6 +226,17 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- Info side panel (right of app, visible on Info tab) -->
+  <div class="vgt-info-side-panel" id="info-side-panel" style="display:none;">
+    <div class="vgt-info-side-content">
+      <button class="vgt-info-btn vgt-info-btn--yt"
+              onclick="window.open('https://www.youtube.com/watch?v=Ds8aovPQ48I','_blank')">
+        ▶&nbsp; Example Kill
+      </button>
+      <img class="vgt-info-side-img" src="./src/img/stand.png" alt="Stand position" />
+    </div>
   </div>
 
   <!-- Skipped players side panel -->

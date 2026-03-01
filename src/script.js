@@ -825,6 +825,24 @@ function toggleChatPanel(show) {
   }
 }
 
+// ── Info Side Panel (right of app, Info tab) ──────────────────────
+
+function toggleInfoSidePanel(show) {
+  if (!document.body.classList.contains('browser-view')) return;
+  var panel = document.getElementById('info-side-panel');
+  var app = document.querySelector('.vgt-app');
+  if (!panel) return;
+
+  if (show) {
+    panel.style.display = 'flex';
+    if (app) app.classList.add('panel-open');
+  } else {
+    panel.style.display = 'none';
+    // Only remove panel-open if skipped panel isn't also open
+    if (app && !skippedPanelOpen) app.classList.remove('panel-open');
+  }
+}
+
 // ── Join Queue ────────────────────────────────────────────────────
 
 var lastSubmittedName = '';
@@ -929,6 +947,7 @@ function init() {
       toggleCompletedSidePanel(false);
       toggleChatPanel(false);
     }
+    toggleInfoSidePanel(tabName === 'info');
   }
 
   document.querySelectorAll('.vgt-tab').forEach(function(tab) {
@@ -937,9 +956,9 @@ function init() {
     });
   });
 
-  // Restore last active tab
-  var savedTab = localStorage.getItem('vgt_activeTab');
-  if (savedTab) switchToTab(savedTab);
+  // Restore last active tab (default to 'info')
+  var savedTab = localStorage.getItem('vgt_activeTab') || 'info';
+  switchToTab(savedTab);
 
   // ── Name input
   var nameDebounce = null;

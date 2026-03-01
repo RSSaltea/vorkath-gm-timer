@@ -772,6 +772,38 @@ body.nis {
   flex-shrink: 0;
 }
 
+/* ── Info Side Panel (right of app, Info tab) ─────────────────── */
+.vgt-info-side-panel {
+  width: 220px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 12px 12px 0;
+  box-shadow: 4px 4px 24px rgba(0,0,0,0.4);
+  padding: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.vgt-info-side-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.vgt-info-side-content .vgt-info-btn--yt {
+  width: 100%;
+}
+
+.vgt-info-side-img {
+  max-width: 100%;
+  border-radius: var(--radius);
+}
+
 /* ── Admin Button ──────────────────────────────────────────────── */
 .vgt-admin-btn {
   background: transparent;
