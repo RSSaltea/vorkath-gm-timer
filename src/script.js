@@ -84,6 +84,8 @@ async function fetchWorld() {
     currentWorld = result.data.value || '';
     var el = document.getElementById('vgt-world');
     if (el) el.textContent = currentWorld ? 'World: ' + currentWorld : '';
+    var worldInput = document.getElementById('ac-world-input');
+    if (worldInput && document.activeElement !== worldInput) worldInput.value = currentWorld;
   } catch (err) {
     console.warn('[VGT] Failed to fetch world:', err);
   }
