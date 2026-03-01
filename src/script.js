@@ -645,6 +645,7 @@ function renderSkippedPanel() {
 }
 
 function toggleSkippedPanel(show) {
+  if (!document.body.classList.contains('browser-view')) return;
   var panel = document.getElementById('skipped-panel');
   var app = document.querySelector('.vgt-app');
   if (!panel || !app) return;
@@ -664,6 +665,7 @@ function toggleSkippedPanel(show) {
 // ── Completed Side Panel (admin, left) ───────────────────────────
 
 function toggleCompletedSidePanel(show) {
+  if (!document.body.classList.contains('browser-view')) return;
   var panel = document.getElementById('completed-side-panel');
   var app = document.querySelector('.vgt-app');
   if (!panel || !app) return;
