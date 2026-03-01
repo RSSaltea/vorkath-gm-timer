@@ -1121,6 +1121,12 @@ body.browser-view .vgt-app.panel-open {
   border-right: none;
 }
 
+body.browser-view .vgt-app.panel-open-left {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: none;
+}
+
 /* ── Session Controls ──────────────────────────────────────────── */
 .vgt-session-controls {
   display: flex;
@@ -1250,6 +1256,111 @@ body.browser-view .vgt-skipped-panel {
 }
 
 .vgt-skipped-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 12px 4px;
+}
+
+/* ── Completed Side Panel (admin, left) ──────────────────────── */
+.vgt-completed-side-panel {
+  width: 200px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 12px 0 0 12px;
+  box-shadow: -4px 4px 24px rgba(0,0,0,0.4);
+  padding: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+body.browser-view .vgt-completed-side-panel {
+  margin-top: 0;
+}
+
+.vgt-completed-side-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a9eff;
+}
+
+.vgt-completed-side-search {
+  width: 100%;
+  padding: 4px 6px;
+  margin-bottom: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+}
+
+.vgt-completed-side-search:focus {
+  border-color: var(--accent);
+}
+
+.vgt-completed-side-search::placeholder {
+  color: var(--text-muted);
+}
+
+.vgt-completed-side-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vgt-completed-side-item {
+  display: flex;
+  align-items: center;
+  padding: 5px 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+
+.vgt-completed-side-name {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.vgt-completed-side-name:hover {
+  color: var(--accent);
+}
+
+.vgt-completed-side-name.editing {
+  overflow: visible;
+}
+
+.vgt-completed-side-name-input {
+  width: 100%;
+  padding: 1px 4px;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+}
+
+.vgt-completed-side-empty {
   text-align: center;
   color: var(--text-muted);
   font-size: 11px;

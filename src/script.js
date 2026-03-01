@@ -33,6 +33,7 @@ var sessionActive   = localStorage.getItem('vgt-session-active') === 'true';
 var sessionKillCount = 0;
 var skippedData     = [];
 var skippedPanelOpen = false;
+var completedSidePanelOpen = false;
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -110,6 +111,10 @@ async function fetchCompleted() {
     if (result.error) throw result.error;
     completedData = result.data ? result.data.map(function(r) { return r.name; }) : [];
     updateCompletedPanel();
+    if (completedSidePanelOpen) {
+      var sideSearch = document.getElementById('completed-side-search');
+      renderCompletedSidePanel(sideSearch ? sideSearch.value.trim() : '');
+    }
   } catch (err) {
     console.warn('[VGT] Failed to fetch completed:', err);
   }
@@ -655,6 +660,51 @@ function toggleSkippedPanel(show) {
   }
 }
 
+// ── Completed Side Panel (admin, left) ───────────────────────────
+
+function toggleCompletedSidePanel(show) {
+  var panel = document.getElementById('completed-side-panel');
+  var app = document.querySelector('.vgt-app');
+  if (!panel || !app) return;
+
+  completedSidePanelOpen = typeof show === 'boolean' ? show : !completedSidePanelOpen;
+
+  if (completedSidePanelOpen) {
+    panel.style.display = 'flex';
+    app.classList.add('panel-open-left');
+    renderCompletedSidePanel();
+  } else {
+    panel.style.display = 'none';
+    app.classList.remove('panel-open-left');
+  }
+}
+
+function renderCompletedSidePanel(filter) {
+  var listEl = document.getElementById('completed-side-list');
+  if (!listEl) return;
+
+  var filtered = completedData;
+  if (filter) {
+    var f = filter.toLowerCase();
+    filtered = completedData.filter(function(n) {
+      return n.toLowerCase().indexOf(f) !== -1;
+    });
+  }
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div class="vgt-completed-side-empty">' + (filter ? 'No results' : 'No completed kills') + '</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < filtered.length; i++) {
+    html += '<div class="vgt-completed-side-item">' +
+      '<span class="vgt-completed-side-name" data-original="' + escapeHtml(filtered[i]) + '">' + escapeHtml(filtered[i]) + '</span>' +
+      '</div>';
+  }
+  listEl.innerHTML = html;
+}
+
 // ── Join Queue ────────────────────────────────────────────────────
 
 var lastSubmittedName = '';
@@ -748,8 +798,10 @@ function init() {
       document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
       if (calibrated && tab.dataset.tab === 'queue') {
         toggleSkippedPanel(true);
+        toggleCompletedSidePanel(true);
       } else {
         toggleSkippedPanel(false);
+        toggleCompletedSidePanel(false);
       }
     });
   });
@@ -806,6 +858,7 @@ function init() {
       adminBtn.classList.remove('active');
       document.getElementById('session-controls').style.display = 'none';
       toggleSkippedPanel(false);
+      toggleCompletedSidePanel(false);
       updateQueueList(queueData);
       return;
     }
@@ -838,6 +891,7 @@ function init() {
         var activeTab = document.querySelector('.vgt-tab.active');
         if (activeTab && activeTab.dataset.tab === 'queue') {
           toggleSkippedPanel(true);
+          toggleCompletedSidePanel(true);
         }
         fetchSessionCount();
         updateSessionDisplay();
@@ -1030,6 +1084,73 @@ function init() {
     sessionActive = false;
     localStorage.setItem('vgt-session-active', 'false');
     updateSessionDisplay();
+  });
+
+  // ── Completed side panel search ──────────────────────────────────
+  document.getElementById('completed-side-search').addEventListener('input', function() {
+    renderCompletedSidePanel(this.value.trim());
+  });
+
+  // ── Completed side panel name editing ──────────────────────────
+  document.getElementById('completed-side-list').addEventListener('click', function(e) {
+    if (!calibrated) return;
+    var nameEl = e.target.closest('.vgt-completed-side-name');
+    if (!nameEl || nameEl.classList.contains('editing')) return;
+
+    var original = nameEl.getAttribute('data-original');
+    nameEl.classList.add('editing');
+
+    var input = document.createElement('input');
+    input.className = 'vgt-completed-side-edit';
+    input.type = 'text';
+    input.value = original;
+    input.setAttribute('autocomplete', 'off');
+    input.setAttribute('spellcheck', 'false');
+    input.setAttribute('data-lpignore', 'true');
+    input.setAttribute('data-1p-ignore', 'true');
+
+    nameEl.textContent = '';
+    nameEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    var saved = false;
+    var blurTimeout = null;
+
+    function saveEdit() {
+      if (saved) return;
+      saved = true;
+      if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+      var newName = input.value.trim();
+      if (newName && newName !== original) {
+        nameEl.textContent = newName;
+        nameEl.setAttribute('data-original', newName);
+        nameEl.classList.remove('editing');
+        sb.rpc('admin_edit_completed_name', { pass: adminPass, old_name: original, new_name: newName })
+          .catch(function(err) { console.warn('[VGT] Completed edit failed:', err); });
+      } else {
+        nameEl.textContent = original;
+        nameEl.classList.remove('editing');
+      }
+    }
+
+    input.addEventListener('blur', function() {
+      blurTimeout = setTimeout(saveEdit, 150);
+    });
+
+    input.addEventListener('focus', function() {
+      if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+    });
+
+    input.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); saveEdit(); }
+      if (ev.key === 'Escape') {
+        saved = true;
+        if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+        nameEl.textContent = original;
+        nameEl.classList.remove('editing');
+      }
+    });
   });
 
   // ── Unskip delegation ────────────────────────────────────────────
