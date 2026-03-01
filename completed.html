@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vorkath GM — Completed</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     @font-face {
       font-family: 'rs-pro-3';
@@ -119,24 +120,17 @@
     </div>
   </div>
   <script>
-    var SHEET_ID = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
+    var SUPABASE_URL = 'https://gogwmrnsofnqkjjxyskt.supabase.co';
+    var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvZ3dtcm5zb2ZucWtqanh5c2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNjE1OTcsImV4cCI6MjA4NzkzNzU5N30.Pw__3qey7A9dV2hjzei-9VNUY4Jc7unVFUGgU-3nTdk';
+    var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
     var completedData = [];
 
     async function fetchCompleted() {
       try {
-        var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-                  "/gviz/tq?tqx=out:csv&sheet=Responses&tq=" +
-                  encodeURIComponent("SELECT B WHERE C='done'");
-        var resp = await fetch(url, { cache: 'no-store' });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        var text = await resp.text();
-        var lines = text.split('\n');
-        var names = [];
-        for (var i = 0; i < lines.length; i++) {
-          var name = lines[i].replace(/^"|"$/g, '').trim();
-          if (name && name.toLowerCase() !== 'your runescape name?') names.push(name);
-        }
-        completedData = names;
+        var result = await sb.from('completed').select('name').order('completed_at', { ascending: false });
+        if (result.error) throw result.error;
+        completedData = result.data ? result.data.map(function(r) { return r.name; }) : [];
         renderList('');
       } catch (err) {
         document.getElementById('list').innerHTML = '<div class="loading">Failed to load.</div>';

@@ -1,62 +1,41 @@
 /* ================================================================
    Vorkath GM Timer — script.js
    ================================================================
-   Fetches the Vorkath GM carry queue from Google Sheets and alerts
-   the player when they are in the top 3 or it is their turn.
+   Manages the Vorkath GM carry queue using Supabase as the backend.
+   Alerts the player when they are in the top 3 or it is their turn.
    ================================================================ */
 
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────
-const SHEET_ID    = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
-const SHEET_NAME  = 'List';
-const REFRESH_MS  = 5_000;    // auto-refresh interval (5 s)
+var SUPABASE_URL = 'https://gogwmrnsofnqkjjxyskt.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvZ3dtcm5zb2ZucWtqanh5c2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNjE1OTcsImV4cCI6MjA4NzkzNzU5N30.Pw__3qey7A9dV2hjzei-9VNUY4Jc7unVFUGgU-3nTdk';
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const GAS_URL = 'https://script.google.com/macros/s/' +
-                'AKfycbxEO8G6_n4zZYjvsPo392a5sam2spGbalidcfjqSs0dZ3TsYbmHKd8EpDBljWWx19c_GA' +
-                '/exec';
-
-const HEARTBEAT_MS         = 15_000;  // send heartbeat every 15 s
-const ONLINE_THRESHOLD_MS  = 20_000;  // online if heartbeat < 20 s old
-const INFO_CODE            = 'dragon fire';
+var REFRESH_MS          = 5000;
+var HEARTBEAT_MS        = 15000;
+var ONLINE_THRESHOLD_MS = 20000;
+var INFO_CODE           = 'dragon fire';
 
 // ── State ─────────────────────────────────────────────────────────
-let queueData       = [];   // current full queue (array of strings)
-let wasFirst        = false;
-let wasInTopThree   = false;
-let refreshTimer    = null;
-let submissionsOpen = true; // controlled by Responses!G947
-let heartbeatTimer  = null;
-let heartbeatData   = {};    // { lowercaseName: isoTimestamp }
-let currentWorld    = '';     // world number from Responses!F2
-let calibrated      = false;
-let configSeed      = null;
-let lastPingCheck   = new Date().toISOString();
-let completedData   = [];     // names marked "done" in Responses!C
-let sessionActive   = localStorage.getItem('vgt-session-active') === 'true';
-let sessionKillCount = 0;
-let skippedData     = [];      // last 20 skipped players
-let skippedPanelOpen = false;
+var queueData       = [];
+var wasFirst        = false;
+var wasInTopThree   = false;
+var refreshTimer    = null;
+var submissionsOpen = true;
+var heartbeatTimer  = null;
+var heartbeatData   = {};
+var currentWorld    = '';
+var calibrated      = false;
+var adminPass       = '';
+var lastPingCheck   = new Date().toISOString();
+var completedData   = [];
+var sessionActive   = localStorage.getItem('vgt-session-active') === 'true';
+var sessionKillCount = 0;
+var skippedData     = [];
+var skippedPanelOpen = false;
 
 // ── Helpers ───────────────────────────────────────────────────────
-
-function sheetUrl(range) {
-  return (
-    'https://docs.google.com/spreadsheets/d/' +
-    SHEET_ID +
-    '/gviz/tq?tqx=out:csv&sheet=' +
-    encodeURIComponent(SHEET_NAME) +
-    '&range=' +
-    encodeURIComponent(range)
-  );
-}
-
-function parseCSV(text) {
-  return text
-    .split('\n')
-    .map(function(row) { return row.replace(/^"|"$/g, '').trim(); })
-    .filter(function(row) { return row.length > 0; });
-}
 
 function escapeHtml(str) {
   return str
@@ -66,24 +45,141 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-
-/** Return the player name typed into the input field. */
 function getEffectiveName() {
   return document.getElementById('name-override').value.trim();
 }
 
-// ── Google Sheets fetch ───────────────────────────────────────────
+// ── Supabase data fetches ─────────────────────────────────────────
 
 async function fetchQueue() {
   try {
-    var resp = await fetch(sheetUrl('A2:A'), { cache: 'no-store' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var text = await resp.text();
-    queueData = parseCSV(text);
+    var result = await sb.from('queue').select('name').order('joined_at');
+    if (result.error) throw result.error;
+    queueData = result.data ? result.data.map(function(r) { return r.name; }) : [];
     return queueData;
   } catch (err) {
     console.warn('[VGT] Failed to fetch queue:', err);
     return null;
+  }
+}
+
+async function fetchSubmissionsOpen() {
+  try {
+    var result = await sb.from('app_state').select('value').eq('key', 'submissions_open').single();
+    if (result.error) throw result.error;
+    submissionsOpen = result.data.value === 'true';
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch submissions status:', err);
+    submissionsOpen = true;
+  }
+}
+
+async function fetchWorld() {
+  try {
+    var result = await sb.from('app_state').select('value').eq('key', 'world').single();
+    if (result.error) throw result.error;
+    currentWorld = result.data.value || '';
+    var el = document.getElementById('vgt-world');
+    if (el) el.textContent = currentWorld ? 'World: ' + currentWorld : '';
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch world:', err);
+  }
+}
+
+async function fetchStats() {
+  try {
+    var result = await sb.from('app_state').select('key, value').in('key', ['total_kills', 'session_kills']);
+    if (result.error) throw result.error;
+    var total = '—';
+    var today = '—';
+    for (var i = 0; i < result.data.length; i++) {
+      if (result.data[i].key === 'total_kills') total = result.data[i].value || '—';
+      if (result.data[i].key === 'session_kills') today = result.data[i].value || '—';
+    }
+    var elTotal = document.getElementById('info-total');
+    var elToday = document.getElementById('info-today');
+    if (elTotal) elTotal.textContent = 'Total: ' + total;
+    if (elToday) elToday.textContent = 'Today: ' + today;
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch stats:', err);
+  }
+}
+
+async function fetchCompleted() {
+  try {
+    var result = await sb.from('completed').select('name').order('completed_at', { ascending: false });
+    if (result.error) throw result.error;
+    completedData = result.data ? result.data.map(function(r) { return r.name; }) : [];
+    updateCompletedPanel();
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch completed:', err);
+  }
+}
+
+async function fetchHeartbeats() {
+  try {
+    var result = await sb.from('heartbeats').select('name, last_seen');
+    if (result.error) throw result.error;
+    heartbeatData = {};
+    if (result.data) {
+      for (var i = 0; i < result.data.length; i++) {
+        heartbeatData[result.data[i].name.toLowerCase()] = result.data[i].last_seen;
+      }
+    }
+  } catch (err) {
+    console.warn('[VGT] Heartbeat fetch failed:', err);
+  }
+}
+
+async function sendHeartbeat() {
+  var name = getEffectiveName();
+  if (!name) return;
+  try {
+    await sb.rpc('upsert_heartbeat', { player_name: name });
+  } catch (err) {
+    console.warn('[VGT] Heartbeat send failed:', err);
+  }
+}
+
+async function fetchPings() {
+  var name = getEffectiveName();
+  if (!name) return;
+  try {
+    var result = await sb.from('pings')
+      .select('pinged_at')
+      .ilike('target_name', name)
+      .gt('pinged_at', lastPingCheck)
+      .limit(1);
+    if (result.error) throw result.error;
+    if (result.data && result.data.length > 0) {
+      playAlert('turn');
+      console.log('[VGT] Ping received!');
+    }
+    lastPingCheck = new Date().toISOString();
+  } catch (err) {
+    console.warn('[VGT] Ping fetch failed:', err);
+  }
+}
+
+async function fetchSessionCount() {
+  try {
+    var result = await sb.from('app_state').select('value').eq('key', 'session_kills').single();
+    if (result.error) throw result.error;
+    sessionKillCount = parseInt(result.data.value, 10) || 0;
+    updateSessionDisplay();
+  } catch (err) {
+    console.warn('[VGT] Session count fetch failed:', err);
+  }
+}
+
+async function fetchSkipped() {
+  try {
+    var result = await sb.from('skipped').select('name').order('skipped_at', { ascending: false }).limit(20);
+    if (result.error) throw result.error;
+    skippedData = result.data ? result.data.map(function(r) { return r.name; }) : [];
+    renderSkippedPanel();
+  } catch (err) {
+    console.warn('[VGT] Skipped fetch failed:', err);
   }
 }
 
@@ -95,10 +191,8 @@ function updateStatus(queue) {
   var alertTitle = document.getElementById('alert-title');
   var alertSub   = document.getElementById('alert-sub');
   var posEl      = document.getElementById('queue-position');
+  var joinBtn    = document.getElementById('join-queue-btn');
 
-  var joinBtn = document.getElementById('join-queue-btn');
-
-  // ── failed to load
   if (!queue) {
     setCard(alertCard, 'error');
     alertIcon.textContent  = '❌';
@@ -111,7 +205,6 @@ function updateStatus(queue) {
 
   var name = getEffectiveName();
 
-  // ── name not set
   if (!name) {
     setCard(alertCard, 'warning');
     alertIcon.textContent  = '👤';
@@ -124,14 +217,12 @@ function updateStatus(queue) {
 
   var nameLower = name.toLowerCase();
   var idx       = -1;
-
   for (var i = 0; i < queue.length; i++) {
     if (queue[i].toLowerCase() === nameLower) { idx = i; break; }
   }
 
-  var rank = idx + 1; // 1-based
+  var rank = idx + 1;
 
-  // ── not in queue
   if (idx === -1) {
     setCard(alertCard, 'neutral');
     alertIcon.textContent  = '💤';
@@ -160,10 +251,8 @@ function updateStatus(queue) {
   }
 
   joinBtn.style.display = 'none';
-
   posEl.textContent = '#' + rank;
 
-  // ── #1 — it's your turn
   if (idx === 0) {
     setCard(alertCard, 'turn');
     alertIcon.textContent  = '🐉';
@@ -178,7 +267,6 @@ function updateStatus(queue) {
     return;
   }
 
-  // ── #2 or #3 — coming up soon
   if (idx <= 2) {
     setCard(alertCard, 'soon');
     alertIcon.textContent  = '⚠️';
@@ -193,7 +281,6 @@ function updateStatus(queue) {
     return;
   }
 
-  // ── in queue but not top 3
   setCard(alertCard, 'waiting');
   alertIcon.textContent  = '⏳';
   alertTitle.textContent = 'In queue';
@@ -277,8 +364,8 @@ function updateQueueList(queue) {
         '</span>';
       moveButtons =
         '<span class="vgt-move-btns">' +
-          '<button class="vgt-move-btn" data-dir="up" data-index="' + i + '" data-name="' + escapeHtml(n) + '"' + (i === 0 ? ' disabled' : '') + ' title="Move up">\u25B2</button>' +
-          '<button class="vgt-move-btn" data-dir="down" data-index="' + i + '" data-name="' + escapeHtml(n) + '"' + (i === queue.length - 1 ? ' disabled' : '') + ' title="Move down">\u25BC</button>' +
+          '<button class="vgt-move-btn" data-dir="up" data-name="' + escapeHtml(n) + '"' + (i === 0 ? ' disabled' : '') + ' title="Move up">\u25B2</button>' +
+          '<button class="vgt-move-btn" data-dir="down" data-name="' + escapeHtml(n) + '"' + (i === queue.length - 1 ? ' disabled' : '') + ' title="Move down">\u25BC</button>' +
         '</span>';
       nameClass += ' editable';
     }
@@ -368,7 +455,6 @@ function playAlert(type) {
 
     var t = ctx.currentTime;
     if (type === 'turn') {
-      // Three ascending beeps — "go now!"
       osc.frequency.setValueAtTime(660, t);
       osc.frequency.setValueAtTime(880, t + 0.12);
       osc.frequency.setValueAtTime(1100, t + 0.24);
@@ -377,7 +463,6 @@ function playAlert(type) {
       osc.start(t);
       osc.stop(t + 0.55);
     } else {
-      // Two softer beeps — "get ready"
       osc.frequency.setValueAtTime(660, t);
       osc.frequency.setValueAtTime(880, t + 0.15);
       gain.gain.setValueAtTime(0.18, t);
@@ -385,9 +470,7 @@ function playAlert(type) {
       osc.start(t);
       osc.stop(t + 0.40);
     }
-  } catch (e) {
-    // Web Audio not available — silently ignore
-  }
+  } catch (e) {}
 }
 
 // ── Dot / timestamp helpers ───────────────────────────────────────
@@ -401,37 +484,6 @@ function updateTimestamp() {
   var now = new Date();
   document.getElementById('last-updated').textContent =
     'Updated ' + now.toLocaleTimeString();
-}
-
-// ── Main refresh ──────────────────────────────────────────────────
-
-async function fetchSubmissionsOpen() {
-  try {
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              '/gviz/tq?tqx=out:csv&sheet=Responses&range=G2';
-    var resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var text = await resp.text();
-    submissionsOpen = text.replace(/"/g, '').trim().toUpperCase() === 'TRUE';
-  } catch (err) {
-    console.warn('[VGT] Failed to fetch submissions status:', err);
-    submissionsOpen = true; // default open on error
-  }
-}
-
-async function fetchWorld() {
-  try {
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              '/gviz/tq?tqx=out:csv&sheet=Responses&range=F2';
-    var resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var text = await resp.text();
-    currentWorld = text.replace(/"/g, '').trim();
-    var el = document.getElementById('vgt-world');
-    if (el) el.textContent = currentWorld ? 'World: ' + currentWorld : '';
-  } catch (err) {
-    console.warn('[VGT] Failed to fetch world:', err);
-  }
 }
 
 // ── Submissions Status Bar ────────────────────────────────────
@@ -448,105 +500,6 @@ function updateSubmissionsStatus() {
   }
 }
 
-// ── Stats (Total / Today) ────────────────────────────────────────
-
-async function fetchStats() {
-  try {
-    var results = await Promise.all([
-      fetch('https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-            '/gviz/tq?tqx=out:csv&sheet=Responses&range=E2', { cache: 'no-store' }),
-      fetch('https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-            '/gviz/tq?tqx=out:csv&sheet=Responses&range=G7', { cache: 'no-store' })
-    ]);
-    if (!results[0].ok || !results[1].ok) throw new Error('HTTP error');
-    var total = (await results[0].text()).replace(/"/g, '').trim();
-    var today = (await results[1].text()).replace(/"/g, '').trim();
-    var elTotal = document.getElementById('info-total');
-    var elToday = document.getElementById('info-today');
-    if (elTotal) elTotal.textContent = 'Total: ' + (total || '—');
-    if (elToday) elToday.textContent = 'Today: ' + (today || '—');
-  } catch (err) {
-    console.warn('[VGT] Failed to fetch stats:', err);
-  }
-}
-
-// ── Completed list ───────────────────────────────────────────────
-
-async function fetchCompleted() {
-  try {
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              "/gviz/tq?tqx=out:csv&sheet=Responses&tq=" +
-              encodeURIComponent("SELECT B WHERE C='done'");
-    var resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var text = await resp.text();
-    var lines = text.split('\n');
-    var names = [];
-    for (var i = 0; i < lines.length; i++) {
-      var name = lines[i].replace(/^"|"$/g, '').trim();
-      if (name && name.toLowerCase() !== 'your runescape name?') names.push(name);
-    }
-    completedData = names;
-    updateCompletedPanel();
-  } catch (err) {
-    console.warn('[VGT] Failed to fetch completed:', err);
-  }
-}
-
-// ── Config seed ──────────────────────────────────────────────────
-
-async function fetchConfigSeed() {
-  try {
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              '/gviz/tq?tqx=out:csv&sheet=Responses&range=H1';
-    var resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var text = await resp.text();
-    configSeed = text.replace(/^"|"$/g, '').trim();
-  } catch (err) {
-    console.warn('[VGT] Failed to fetch config seed:', err);
-    configSeed = null;
-  }
-}
-
-// ── Pings ─────────────────────────────────────────────────────────
-
-async function fetchPings() {
-  var name = getEffectiveName();
-  if (!name) return;
-
-  try {
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              '/gviz/tq?tqx=out:csv&sheet=Pings&range=A2:B';
-    var resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var text = await resp.text();
-    var rows = text.split('\n');
-    var nameLower = name.toLowerCase();
-
-    for (var i = 0; i < rows.length; i++) {
-      if (!rows[i].trim()) continue;
-      var idx = rows[i].indexOf(',');
-      if (idx === -1) continue;
-      var pingName = rows[i].substring(0, idx).replace(/^"|"$/g, '').trim().toLowerCase();
-      var pingTime = rows[i].substring(idx + 1).replace(/^"|"$/g, '').trim();
-      if (pingName === nameLower) {
-        var pingDate = new Date(pingTime).getTime();
-        var lastCheck = new Date(lastPingCheck).getTime();
-        if (!isNaN(pingDate) && pingDate > lastCheck) {
-          playAlert('turn');
-          console.log('[VGT] Ping received! Timestamp:', pingTime);
-        }
-        break;
-      }
-    }
-
-    lastPingCheck = new Date().toISOString();
-  } catch (err) {
-    console.warn('[VGT] Ping fetch failed:', err);
-  }
-}
-
 // ── Queue actions ─────────────────────────────────────────────────
 
 async function runAction(action, name, btnEl) {
@@ -554,25 +507,27 @@ async function runAction(action, name, btnEl) {
   btnEl.disabled = true;
 
   try {
-    var actionUrl = GAS_URL + '?action=' + action + '&name=' + encodeURIComponent(name);
-    // If marking done during an active session, tell GAS to increment the kill counter
+    var result;
+    if (action === 'adminDone') {
+      result = await sb.rpc('admin_complete', {
+        pass: adminPass,
+        player_name: name,
+        increment_session: sessionActive
+      });
+    } else if (action === 'adminSkip') {
+      result = await sb.rpc('admin_skip', { pass: adminPass, player_name: name });
+    } else if (action === 'ping') {
+      result = await sb.rpc('admin_ping', { pass: adminPass, target: name });
+    }
+
+    if (result.error) throw result.error;
+
+    btnEl.textContent = '\u2713';
     if (action === 'adminDone' && sessionActive) {
-      actionUrl += '&sessionIncrement=true';
+      sessionKillCount++;
+      updateSessionDisplay();
     }
-    var resp = await fetch(actionUrl, { cache: 'no-store' });
-    var data = await resp.json();
-    if (data.ok) {
-      btnEl.textContent = '\u2713';
-      // Optimistically increment local kill count
-      if (action === 'adminDone' && sessionActive) {
-        sessionKillCount++;
-        updateSessionDisplay();
-      }
-      setTimeout(refresh, 1500);
-    } else {
-      btnEl.textContent = '!';
-      btnEl.disabled = false;
-    }
+    setTimeout(refresh, 1500);
   } catch (err) {
     console.warn('[VGT] Action failed:', err);
     btnEl.textContent = '!';
@@ -582,42 +537,6 @@ async function runAction(action, name, btnEl) {
 
 // ── Heartbeat ─────────────────────────────────────────────────────
 
-async function sendHeartbeat() {
-  var name = getEffectiveName();
-  if (!name) return;
-  try {
-    await fetch(
-      GAS_URL + '?action=heartbeat&name=' + encodeURIComponent(name),
-      { cache: 'no-store' }
-    );
-  } catch (err) {
-    console.warn('[VGT] Heartbeat send failed:', err);
-  }
-}
-
-async function fetchHeartbeats() {
-  try {
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              '/gviz/tq?tqx=out:csv&sheet=Heartbeats&range=A2:B';
-    var resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var text = await resp.text();
-    var rows = text.split('\n');
-    heartbeatData = {};
-    for (var i = 0; i < rows.length; i++) {
-      if (!rows[i].trim()) continue;
-      // Split on first comma only — timestamp may contain commas if Sheets auto-formats
-      var idx = rows[i].indexOf(',');
-      if (idx === -1) continue;
-      var n  = rows[i].substring(0, idx).replace(/^"|"$/g, '').trim().toLowerCase();
-      var ts = rows[i].substring(idx + 1).replace(/^"|"$/g, '').trim();
-      if (n) heartbeatData[n] = ts;
-    }
-  } catch (err) {
-    console.warn('[VGT] Heartbeat fetch failed:', err);
-  }
-}
-
 function isOnline(name) {
   var key  = name.toLowerCase();
   var ts   = heartbeatData[key];
@@ -626,6 +545,8 @@ function isOnline(name) {
   if (isNaN(then)) return false;
   return (Date.now() - then) < ONLINE_THRESHOLD_MS;
 }
+
+// ── Main refresh ──────────────────────────────────────────────────
 
 async function refresh() {
   setDot('loading');
@@ -652,20 +573,6 @@ async function refresh() {
 
 // ── Session Tracking ─────────────────────────────────────────────
 
-async function fetchSessionCount() {
-  try {
-    var url = sheetUrl("'Responses'!G7");
-    var resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) return;
-    var text = await resp.text();
-    var val = text.replace(/"/g, '').trim();
-    sessionKillCount = parseInt(val, 10) || 0;
-    updateSessionDisplay();
-  } catch (err) {
-    console.warn('[VGT] Session count fetch failed:', err);
-  }
-}
-
 function updateSessionDisplay() {
   var countEl = document.getElementById('session-count');
   var startBtn = document.getElementById('session-start-btn');
@@ -685,23 +592,6 @@ function updateSessionDisplay() {
 }
 
 // ── Skipped Players ──────────────────────────────────────────────
-
-async function fetchSkipped() {
-  try {
-    var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-              '/gviz/tq?tqx=out:csv&sheet=Responses&tq=' +
-              encodeURIComponent("SELECT B WHERE E=TRUE ORDER BY A DESC LIMIT 20");
-    var resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) return;
-    var text = await resp.text();
-    skippedData = text.split('\n')
-      .map(function(r) { return r.replace(/^\"|\"$/g, '').trim(); })
-      .filter(function(r) { return r.length > 0 && r !== 'name' && r.toLowerCase().indexOf('runescape') === -1; });
-    renderSkippedPanel();
-  } catch (err) {
-    console.warn('[VGT] Skipped fetch failed:', err);
-  }
-}
 
 function renderSkippedPanel() {
   var listEl = document.getElementById('skipped-list');
@@ -748,14 +638,12 @@ async function joinQueue() {
   var name = getEffectiveName();
   if (!name) return;
 
-  // Verify info code
   var infoInput = document.getElementById('info-phrase-input');
   var infoValue = infoInput ? infoInput.value.trim().toLowerCase() : '';
   if (infoValue !== INFO_CODE) return;
 
   var btn = document.getElementById('join-queue-btn');
 
-  // Local guard: block rapid duplicate submissions of the same name
   if (name.toLowerCase() === lastSubmittedName.toLowerCase() && Date.now() - lastSubmitTime < 30000) {
     btn.textContent = 'Already submitted';
     btn.disabled = true;
@@ -772,8 +660,9 @@ async function joinQueue() {
   btn.textContent = 'Submitting...';
 
   try {
-    var resp = await fetch(GAS_URL + '?name=' + encodeURIComponent(name));
-    var data = await resp.json();
+    var result = await sb.rpc('join_queue', { player_name: name });
+    if (result.error) throw result.error;
+    var data = result.data;
     if (data.ok) {
       btn.textContent = '\u2713 Joined queue!';
       lastSubmittedName = name;
@@ -831,7 +720,6 @@ function init() {
       });
       tab.classList.add('active');
       document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-      // Show skipped panel only on queue tab when admin
       if (calibrated && tab.dataset.tab === 'queue') {
         toggleSkippedPanel(true);
       } else {
@@ -840,7 +728,7 @@ function init() {
     });
   });
 
-  // ── Name input: update display immediately; refresh queue 1s after typing stops
+  // ── Name input
   var nameDebounce = null;
   var heartbeatDebounce = null;
   document.getElementById('name-override').addEventListener('input', function() {
@@ -849,12 +737,11 @@ function init() {
     updateQueueList(queueData);
     clearTimeout(nameDebounce);
     nameDebounce = setTimeout(refresh, 1000);
-    // Debounce heartbeat — wait 5 s after last keystroke before sending
     clearTimeout(heartbeatDebounce);
     heartbeatDebounce = setTimeout(sendHeartbeat, 5000);
   });
 
-  // ── Info phrase input — re-evaluate join button on typing
+  // ── Info phrase input
   document.getElementById('info-phrase-input').addEventListener('input', function() {
     updateStatus(queueData);
   });
@@ -874,15 +761,13 @@ function init() {
 
   // ── Completed list — refresh every 60 s
   fetchCompleted();
-  setInterval(fetchCompleted, 60_000);
+  setInterval(fetchCompleted, 60000);
 
   // ── Heartbeat — announce presence every 15 s
   sendHeartbeat();
   heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
 
-  // ── Calibration mode ───────────────────────────────────────────
-  fetchConfigSeed();
-
+  // ── Admin login ──────────────────────────────────────────────────
   var adminBtn       = document.getElementById('admin-btn');
   var adminOverlay   = document.getElementById('admin-overlay');
   var adminPassInput = document.getElementById('admin-pass-input');
@@ -893,6 +778,7 @@ function init() {
   adminBtn.addEventListener('click', function() {
     if (calibrated) {
       calibrated = false;
+      adminPass = '';
       adminBtn.textContent = 'Admin';
       adminBtn.classList.remove('active');
       document.getElementById('session-controls').style.display = 'none';
@@ -910,35 +796,39 @@ function init() {
     adminOverlay.style.display = 'none';
   });
 
-  function attemptCalibration() {
+  async function attemptCalibration() {
     var entered = adminPassInput.value.trim();
-    if (!configSeed) {
+    if (!entered) return;
+    adminLoginBtn.disabled = true;
+    try {
+      var result = await sb.rpc('check_admin', { pass: entered });
+      if (result.error) throw result.error;
+      if (result.data === true) {
+        calibrated = true;
+        adminPass = entered;
+        adminOverlay.style.display = 'none';
+        adminBtn.textContent = 'Admin \u2713';
+        adminBtn.classList.add('active');
+        updateToggleOpenBtn();
+        updateQueueList(queueData);
+        document.getElementById('session-controls').style.display = 'flex';
+        var activeTab = document.querySelector('.vgt-tab.active');
+        if (activeTab && activeTab.dataset.tab === 'queue') {
+          toggleSkippedPanel(true);
+        }
+        fetchSessionCount();
+        updateSessionDisplay();
+      } else {
+        adminError.textContent = 'Invalid key';
+        adminError.style.display = 'block';
+        adminPassInput.value = '';
+        adminPassInput.focus();
+      }
+    } catch (err) {
       adminError.textContent = 'Could not verify — retry';
       adminError.style.display = 'block';
-      fetchConfigSeed();
-      return;
     }
-    if (entered === configSeed) {
-      calibrated = true;
-      adminOverlay.style.display = 'none';
-      adminBtn.textContent = 'Admin \u2713';
-      adminBtn.classList.add('active');
-      updateToggleOpenBtn();
-      updateQueueList(queueData);
-      document.getElementById('session-controls').style.display = 'flex';
-      // Only show skipped panel if queue tab is active
-      var activeTab = document.querySelector('.vgt-tab.active');
-      if (activeTab && activeTab.dataset.tab === 'queue') {
-        toggleSkippedPanel(true);
-      }
-      fetchSessionCount();
-      updateSessionDisplay();
-    } else {
-      adminError.textContent = 'Invalid key';
-      adminError.style.display = 'block';
-      adminPassInput.value = '';
-      adminPassInput.focus();
-    }
+    adminLoginBtn.disabled = false;
   }
 
   adminLoginBtn.addEventListener('click', attemptCalibration);
@@ -948,13 +838,12 @@ function init() {
     if (e.key === 'Escape') adminOverlay.style.display = 'none';
   });
 
-  // ── Queue action delegation (single listener) ──────────────────
+  // ── Queue action delegation ──────────────────────────────────────
   var queueListEl = document.getElementById('queue-list');
 
   queueListEl.addEventListener('click', function(e) {
     if (!calibrated) return;
 
-    // Admin action buttons
     var btn = e.target.closest('.vgt-admin-action');
     if (btn && !btn.disabled) {
       var action = btn.getAttribute('data-action');
@@ -963,13 +852,12 @@ function init() {
       return;
     }
 
-    // Inline name editing (DOM-based with debounced blur to prevent password-manager interference)
+    // Inline name editing
     var nameEl = e.target.closest('.vgt-queue-name.editable');
     if (nameEl && !nameEl.classList.contains('editing')) {
       var original = nameEl.getAttribute('data-original');
       nameEl.classList.add('editing');
 
-      // Build input via DOM (not innerHTML) to avoid browser autofill scanning
       var input = document.createElement('input');
       input.className = 'vgt-queue-name-input';
       input.type = 'text';
@@ -1002,7 +890,7 @@ function init() {
         if (newName && newName !== original) {
           nameEl.textContent = newName;
           nameEl.classList.remove('editing');
-          fetch(GAS_URL + '?action=editName&oldName=' + encodeURIComponent(original) + '&newName=' + encodeURIComponent(newName), { cache: 'no-store' })
+          sb.rpc('admin_edit_name', { pass: adminPass, old_name: original, new_name: newName })
             .then(function() { setTimeout(refresh, 1500); })
             .catch(function(err) { console.warn('[VGT] Edit failed:', err); });
         } else {
@@ -1012,7 +900,6 @@ function init() {
       }
 
       input.addEventListener('blur', function() {
-        // Debounce blur — if input regains focus within 150ms, cancel the save
         blurTimeout = setTimeout(saveEdit, 150);
       });
 
@@ -1037,20 +924,22 @@ function init() {
     var moveBtn = e.target.closest('.vgt-move-btn');
     if (!moveBtn || !calibrated || moveBtn.disabled) return;
 
-    var fromIndex = parseInt(moveBtn.getAttribute('data-index'), 10);
     var dir = moveBtn.getAttribute('data-dir');
-    var toIndex = dir === 'up' ? fromIndex - 1 : fromIndex + 1;
     var movedName = moveBtn.getAttribute('data-name');
 
-    if (toIndex < 0 || toIndex >= queueData.length) return;
+    var fromIndex = -1;
+    for (var i = 0; i < queueData.length; i++) {
+      if (queueData[i] === movedName) { fromIndex = i; break; }
+    }
+    var toIndex = dir === 'up' ? fromIndex - 1 : fromIndex + 1;
+    if (fromIndex === -1 || toIndex < 0 || toIndex >= queueData.length) return;
 
     // Optimistically reorder
     queueData.splice(fromIndex, 1);
     queueData.splice(toIndex, 0, movedName);
     updateQueueList(queueData);
 
-    // Send to GAS
-    fetch(GAS_URL + '?action=moveQueue&name=' + encodeURIComponent(movedName) + '&toIndex=' + toIndex, { cache: 'no-store' })
+    sb.rpc('admin_move_queue', { pass: adminPass, player_name: movedName, direction: dir })
       .then(function() { setTimeout(refresh, 2000); })
       .catch(function(err) { console.warn('[VGT] Move failed:', err); });
   });
@@ -1059,12 +948,13 @@ function init() {
   document.getElementById('toggle-open-btn').addEventListener('click', async function() {
     if (!calibrated) return;
     var btn = this;
-    var newValue = !submissionsOpen;
     btn.disabled = true;
     try {
-      await fetch(GAS_URL + '?action=toggleOpen&value=' + newValue, { mode: 'no-cors' });
-      submissionsOpen = newValue;
+      var result = await sb.rpc('admin_toggle_submissions', { pass: adminPass });
+      if (result.error) throw result.error;
+      submissionsOpen = result.data === 'true';
       updateToggleOpenBtn();
+      updateSubmissionsStatus();
     } catch (err) {
       console.warn('[VGT] Failed to toggle open:', err);
     }
@@ -1103,7 +993,8 @@ function init() {
     if (!calibrated) return;
     this.disabled = true;
     try {
-      await fetch(GAS_URL + '?action=sessionStart', { cache: 'no-store' });
+      var result = await sb.rpc('admin_session_start', { pass: adminPass });
+      if (result.error) throw result.error;
       sessionActive = true;
       sessionKillCount = 0;
       localStorage.setItem('vgt-session-active', 'true');
@@ -1128,8 +1019,8 @@ function init() {
     btn.disabled = true;
     btn.textContent = '...';
     try {
-      await fetch(GAS_URL + '?action=unskipPlayer&name=' + encodeURIComponent(name), { cache: 'no-store' });
-      // Remove from local data and re-render
+      var result = await sb.rpc('admin_unskip', { pass: adminPass, player_name: name });
+      if (result.error) throw result.error;
       skippedData = skippedData.filter(function(n) { return n !== name; });
       renderSkippedPanel();
       setTimeout(refresh, 1500);
@@ -1149,7 +1040,6 @@ if (typeof alt1 !== 'undefined') {
     console.error('[VGT] identifyAppUrl error:', e);
   }
 } else {
-  // Running in a regular browser — show the install banner
   document.body.classList.add('browser-view');
   var banner = document.getElementById('alt1-banner');
   if (banner) banner.style.display = 'flex';

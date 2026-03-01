@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vorkath GM — Queue</title>
   <link rel="icon" href="./src/icon1.png" type="image/png" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -156,7 +157,9 @@
     </div>
   </div>
   <script>
-    var SHEET_ID = '164faXDaQzmPjvTX02SeK-UTjXe2Vq6GjA-EZOPF7UFQ';
+    var SUPABASE_URL = 'https://gogwmrnsofnqkjjxyskt.supabase.co';
+    var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvZ3dtcm5zb2ZucWtqanh5c2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNjE1OTcsImV4cCI6MjA4NzkzNzU5N30.Pw__3qey7A9dV2hjzei-9VNUY4Jc7unVFUGgU-3nTdk';
+    var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     function escapeHtml(str) {
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -164,14 +167,9 @@
 
     async function fetchQueue() {
       try {
-        var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-                  '/gviz/tq?tqx=out:csv&sheet=List&range=A2:A';
-        var resp = await fetch(url, { cache: 'no-store' });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        var text = await resp.text();
-        var names = text.split('\n')
-          .map(function(r) { return r.replace(/^"|"$/g, '').trim(); })
-          .filter(function(r) { return r.length > 0; });
+        var result = await sb.from('queue').select('name').order('joined_at');
+        if (result.error) throw result.error;
+        var names = result.data ? result.data.map(function(r) { return r.name; }) : [];
         renderQueue(names);
       } catch (err) {
         document.getElementById('hero-area').innerHTML = '';
@@ -181,29 +179,25 @@
 
     async function fetchWorld() {
       try {
-        var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-                  '/gviz/tq?tqx=out:csv&sheet=Responses&range=F2';
-        var resp = await fetch(url, { cache: 'no-store' });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        var text = await resp.text();
-        var world = text.replace(/"/g, '').trim();
+        var result = await sb.from('app_state').select('value').eq('key', 'world').single();
+        if (result.error) throw result.error;
+        var world = result.data.value || '';
         document.getElementById('fc-world').textContent = world ? 'World: ' + world : '';
       } catch (err) {}
     }
 
     async function fetchStats() {
       try {
-        var results = await Promise.all([
-          fetch('https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-                '/gviz/tq?tqx=out:csv&sheet=Responses&range=E2', { cache: 'no-store' }),
-          fetch('https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-                '/gviz/tq?tqx=out:csv&sheet=Responses&range=G7', { cache: 'no-store' })
-        ]);
-        if (!results[0].ok || !results[1].ok) throw new Error('HTTP error');
-        var total = (await results[0].text()).replace(/"/g, '').trim();
-        var today = (await results[1].text()).replace(/"/g, '').trim();
-        document.getElementById('stat-total').textContent = 'Total: ' + (total || '—');
-        document.getElementById('stat-today').textContent = 'Today: ' + (today || '—');
+        var result = await sb.from('app_state').select('key, value').in('key', ['total_kills', 'session_kills']);
+        if (result.error) throw result.error;
+        var total = '—';
+        var today = '—';
+        for (var i = 0; i < result.data.length; i++) {
+          if (result.data[i].key === 'total_kills') total = result.data[i].value || '—';
+          if (result.data[i].key === 'session_kills') today = result.data[i].value || '—';
+        }
+        document.getElementById('stat-total').textContent = 'Total: ' + total;
+        document.getElementById('stat-today').textContent = 'Today: ' + today;
       } catch (err) {}
     }
 
@@ -217,14 +211,12 @@
         return;
       }
 
-      // Hero card for #1
       heroEl.innerHTML =
         '<div class="hero">' +
           '<span class="hero-rank">#1</span>' +
           '<span class="hero-name">' + escapeHtml(names[0]) + '</span>' +
         '</div>';
 
-      // #2 through #5
       var top = Math.min(names.length, 5);
       if (top <= 1) {
         listEl.innerHTML = '';
@@ -235,7 +227,6 @@
         var rank = i + 1;
         var cls = 'item';
         if (rank <= 3) cls += ' top3';
-
         html += '<div class="' + cls + '"><span class="item-rank">#' + rank + '</span><span class="item-name">' + escapeHtml(names[i]) + '</span></div>';
       }
       listEl.innerHTML = html;
