@@ -37,6 +37,9 @@ var completedSidePanelOpen = false;
 var adminControlsPanelOpen = false;
 var chatPanelOpen = false;
 var chatMessages = [];
+var dragSrcIndex = -1;
+var dragOverIndex = -1;
+var isDragging = false;
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -332,8 +335,8 @@ function updateQueueList(queue) {
   var countEl = document.getElementById('queue-count');
   if (countEl) countEl.textContent = queue ? queue.length : 0;
 
-  // Skip re-render if an inline name edit is in progress
-  if (listEl.querySelector('.vgt-queue-name.editing')) return;
+  // Skip re-render if an inline name edit or drag is in progress
+  if (isDragging || listEl.querySelector('.vgt-queue-name.editing')) return;
 
   if (!queue) {
     listEl.innerHTML = '<div class="vgt-queue-state">Failed to load queue.</div>';
@@ -372,8 +375,9 @@ function updateQueueList(queue) {
     var dotTitle = online ? 'Online — plugin active' : 'Offline — plugin not detected';
 
     var adminBtns = '';
-    var moveButtons = '';
+    var dragHandle = '';
     var nameClass = 'vgt-queue-name';
+    var draggableAttr = '';
     if (calibrated) {
       adminBtns =
         '<span class="vgt-admin-actions">' +
@@ -381,17 +385,14 @@ function updateQueueList(queue) {
           '<button class="vgt-admin-action skip" data-action="adminSkip" data-name="' + escapeHtml(n) + '" title="Mark Skip">\u2717</button>' +
           '<button class="vgt-admin-action ping" data-action="ping" data-name="' + escapeHtml(n) + '" title="Ping Player">\u266A</button>' +
         '</span>';
-      moveButtons =
-        '<span class="vgt-move-btns">' +
-          '<button class="vgt-move-btn" data-dir="up" data-name="' + escapeHtml(n) + '"' + (i === 0 ? ' disabled' : '') + ' title="Move up">\u25B2</button>' +
-          '<button class="vgt-move-btn" data-dir="down" data-name="' + escapeHtml(n) + '"' + (i === queue.length - 1 ? ' disabled' : '') + ' title="Move down">\u25BC</button>' +
-        '</span>';
+      dragHandle = '<span class="vgt-drag-handle" title="Drag to reorder">\u2261</span>';
+      draggableAttr = ' draggable="true"';
       nameClass += ' editable';
     }
 
     html +=
-      '<div class="' + cls + '" data-index="' + i + '">' +
-        moveButtons +
+      '<div class="' + cls + '" data-index="' + i + '"' + draggableAttr + '>' +
+        dragHandle +
         '<span class="vgt-queue-rank">#' + rank + '</span>' +
         '<span class="' + dotClass + '" title="' + dotTitle + '"></span>' +
         '<span class="' + nameClass + '" data-original="' + escapeHtml(n) + '">' + escapeHtml(n) + youTag + '</span>' +
@@ -1196,28 +1197,86 @@ function init() {
     }
   });
 
-  // ── Move up/down buttons ────────────────────────────────────────
-  queueListEl.addEventListener('click', function(e) {
-    var moveBtn = e.target.closest('.vgt-move-btn');
-    if (!moveBtn || !calibrated || moveBtn.disabled) return;
+  // ── Drag-and-drop reordering ────────────────────────────────────
+  queueListEl.addEventListener('dragstart', function(e) {
+    var item = e.target.closest('.vgt-queue-item[draggable="true"]');
+    if (!item || !calibrated) return;
+    dragSrcIndex = parseInt(item.getAttribute('data-index'), 10);
+    isDragging = true;
+    item.classList.add('vgt-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '' + dragSrcIndex);
+  });
 
-    var dir = moveBtn.getAttribute('data-dir');
-    var movedName = moveBtn.getAttribute('data-name');
-
-    var fromIndex = -1;
-    for (var i = 0; i < queueData.length; i++) {
-      if (queueData[i] === movedName) { fromIndex = i; break; }
+  queueListEl.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    var item = e.target.closest('.vgt-queue-item');
+    if (!item) return;
+    // Clear previous indicators
+    var items = queueListEl.querySelectorAll('.vgt-queue-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('vgt-drop-above', 'vgt-drop-below');
     }
-    var toIndex = dir === 'up' ? fromIndex - 1 : fromIndex + 1;
-    if (fromIndex === -1 || toIndex < 0 || toIndex >= queueData.length) return;
+    var idx = parseInt(item.getAttribute('data-index'), 10);
+    var rect = item.getBoundingClientRect();
+    var midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+      item.classList.add('vgt-drop-above');
+      dragOverIndex = idx;
+    } else {
+      item.classList.add('vgt-drop-below');
+      dragOverIndex = idx + 1;
+    }
+  });
 
-    // Optimistically reorder
-    queueData.splice(fromIndex, 1);
-    queueData.splice(toIndex, 0, movedName);
+  queueListEl.addEventListener('dragleave', function(e) {
+    var item = e.target.closest('.vgt-queue-item');
+    if (item) {
+      item.classList.remove('vgt-drop-above', 'vgt-drop-below');
+    }
+  });
+
+  queueListEl.addEventListener('dragend', function() {
+    isDragging = false;
+    dragSrcIndex = -1;
+    dragOverIndex = -1;
+    var items = queueListEl.querySelectorAll('.vgt-queue-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('vgt-dragging', 'vgt-drop-above', 'vgt-drop-below');
+    }
+  });
+
+  queueListEl.addEventListener('drop', function(e) {
+    e.preventDefault();
+    var targetIdx = dragOverIndex;
+    var srcIdx = dragSrcIndex;
+
+    // Clean up drag state
+    isDragging = false;
+    dragSrcIndex = -1;
+    dragOverIndex = -1;
+    var items = queueListEl.querySelectorAll('.vgt-queue-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('vgt-dragging', 'vgt-drop-above', 'vgt-drop-below');
+    }
+
+    if (srcIdx === -1 || targetIdx === -1 || srcIdx === targetIdx) return;
+    // Adjust target if dragging downward (splice shift)
+    if (targetIdx > srcIdx) targetIdx--;
+    if (srcIdx === targetIdx) return;
+
+    var movedName = queueData[srcIdx];
+    // Optimistic reorder
+    queueData.splice(srcIdx, 1);
+    queueData.splice(targetIdx, 0, movedName);
     updateQueueList(queueData);
 
-    sb.rpc('admin_move_queue', { pass: adminPass, player_name: movedName, direction: dir })
-      .catch(function(err) { console.warn('[VGT] Move failed:', err); });
+    sb.rpc('admin_reorder_queue', { pass: adminPass, player_name: movedName, new_pos: targetIdx })
+      .then(function(res) {
+        if (res.error) { console.warn('[VGT] Reorder failed:', res.error); refresh(); }
+      })
+      .catch(function(err) { console.warn('[VGT] Reorder failed:', err); refresh(); });
   });
 
   // ── Admin controls panel buttons ─────────────────────────────

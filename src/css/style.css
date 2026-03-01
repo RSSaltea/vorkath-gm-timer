@@ -947,39 +947,36 @@ body.nis {
   cursor: default;
 }
 
-/* ── Move Buttons ─────────────────────────────────────────────── */
-.vgt-move-btns {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex-shrink: 0;
-}
-
-.vgt-move-btn {
-  width: 16px;
-  height: 12px;
-  border: none;
-  background: transparent;
+/* ── Drag Handle & Drag States ────────────────────────────────── */
+.vgt-drag-handle {
+  cursor: grab;
   color: var(--text-muted);
-  font-size: 8px;
+  font-size: 14px;
   line-height: 1;
-  padding: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 2px;
-  transition: color 0.15s, background 0.15s;
+  padding: 0 2px;
+  flex-shrink: 0;
+  user-select: none;
+  transition: color 0.15s;
 }
 
-.vgt-move-btn:hover:not(:disabled) {
+.vgt-drag-handle:hover {
   color: var(--accent);
-  background: var(--accent-dim);
 }
 
-.vgt-move-btn:disabled {
-  opacity: 0.2;
-  cursor: default;
+.vgt-queue-item[draggable="true"] {
+  cursor: grab;
+}
+
+.vgt-queue-item.vgt-dragging {
+  opacity: 0.4;
+}
+
+.vgt-queue-item.vgt-drop-above {
+  border-top: 2px solid var(--accent);
+}
+
+.vgt-queue-item.vgt-drop-below {
+  border-bottom: 2px solid var(--accent);
 }
 
 /* ── Inline Name Edit ─────────────────────────────────────────── */
