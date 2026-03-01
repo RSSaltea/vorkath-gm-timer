@@ -105,6 +105,8 @@ async function fetchStats() {
     var elToday = document.getElementById('info-today');
     if (elTotal) elTotal.textContent = 'Total: ' + total;
     if (elToday) elToday.textContent = 'Today: ' + today;
+    var elQueueTotal = document.getElementById('queue-total-carries');
+    if (elQueueTotal) elQueueTotal.textContent = 'Total: ' + total;
   } catch (err) {
     console.warn('[VGT] Failed to fetch stats:', err);
   }
@@ -1019,6 +1021,8 @@ function init() {
     }
     fetchSessionState();
     updateToggleOpenBtn();
+    var qtc = document.getElementById('queue-total-carries');
+    if (qtc) qtc.style.display = '';
   }
 
   function deactivateAdmin() {
@@ -1036,6 +1040,8 @@ function init() {
     toggleCompletedSidePanel(false);
     toggleChatPanel(false);
     updateQueueList(queueData);
+    var qtc = document.getElementById('queue-total-carries');
+    if (qtc) qtc.style.display = 'none';
   }
 
   // ── Auto-login from saved session ─────────────────────────────
