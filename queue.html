@@ -127,6 +127,13 @@
       letter-spacing: 0.5px;
     }
     .badge.soon { background: rgba(255,152,0,0.15); color: #ff9800; }
+    .queue-count {
+      font-size: 20px;
+      color: #9aa0a6;
+      padding: 8px 0;
+      border-bottom: 1px solid #26263a;
+      margin-bottom: 8px;
+    }
     .loading {
       text-align: center;
       color: #6e7380;
@@ -151,6 +158,7 @@
         <span class="stat" id="stat-today">Today: —</span>
       </div>
     </div>
+    <div class="queue-count" id="queue-count">Queue: 0</div>
     <div id="hero-area"></div>
     <div class="list" id="list">
       <div class="loading">Loading queue...</div>
@@ -204,6 +212,7 @@
     function renderQueue(names) {
       var heroEl = document.getElementById('hero-area');
       var listEl = document.getElementById('list');
+      document.getElementById('queue-count').textContent = 'Queue: ' + names.length;
 
       if (names.length === 0) {
         heroEl.innerHTML = '';
