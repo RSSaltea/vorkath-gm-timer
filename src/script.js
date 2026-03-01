@@ -18,6 +18,7 @@ const GAS_URL = 'https://script.google.com/macros/s/' +
 
 const HEARTBEAT_MS         = 15_000;  // send heartbeat every 15 s
 const ONLINE_THRESHOLD_MS  = 20_000;  // online if heartbeat < 20 s old
+const INFO_CODE            = 'dragon fire';
 
 // ── State ─────────────────────────────────────────────────────────
 let queueData       = [];   // current full queue (array of strings)
@@ -117,14 +118,7 @@ function updateStatus(queue) {
     alertTitle.textContent = 'No name set';
     alertSub.textContent   = 'Enter your RS name in the box above';
     posEl.textContent      = '—';
-    if (!submissionsOpen) {
-      joinBtn.style.display = 'block';
-      joinBtn.disabled      = true;
-      joinBtn.textContent   = 'Submissions closed';
-      joinBtn.classList.add('closed');
-    } else {
-      joinBtn.style.display = 'none';
-    }
+    joinBtn.style.display  = 'none';
     return;
   }
 
@@ -144,15 +138,21 @@ function updateStatus(queue) {
     alertTitle.textContent = 'Not in queue';
     alertSub.textContent   = 'You are not currently listed';
     posEl.textContent      = '—';
-    joinBtn.style.display  = 'block';
-    if (submissionsOpen) {
-      joinBtn.disabled     = false;
-      joinBtn.textContent  = '+ Join Queue';
-      joinBtn.classList.remove('closed');
+    if (!submissionsOpen) {
+      joinBtn.style.display = 'none';
     } else {
-      joinBtn.disabled     = true;
-      joinBtn.textContent  = 'Submissions closed';
-      joinBtn.classList.add('closed');
+      joinBtn.style.display = 'block';
+      var infoInput = document.getElementById('info-phrase-input');
+      var infoValue = infoInput ? infoInput.value.trim().toLowerCase() : '';
+      if (infoValue !== INFO_CODE) {
+        joinBtn.disabled    = true;
+        joinBtn.textContent = 'Incorrect Info Phrase';
+        joinBtn.classList.add('closed');
+      } else {
+        joinBtn.disabled    = false;
+        joinBtn.textContent = '+ Join Queue';
+        joinBtn.classList.remove('closed');
+      }
     }
     wasInTopThree = false;
     wasFirst      = false;
@@ -748,6 +748,11 @@ async function joinQueue() {
   var name = getEffectiveName();
   if (!name) return;
 
+  // Verify info code
+  var infoInput = document.getElementById('info-phrase-input');
+  var infoValue = infoInput ? infoInput.value.trim().toLowerCase() : '';
+  if (infoValue !== INFO_CODE) return;
+
   var btn = document.getElementById('join-queue-btn');
 
   // Local guard: block rapid duplicate submissions of the same name
@@ -847,6 +852,11 @@ function init() {
     // Debounce heartbeat — wait 5 s after last keystroke before sending
     clearTimeout(heartbeatDebounce);
     heartbeatDebounce = setTimeout(sendHeartbeat, 5000);
+  });
+
+  // ── Info phrase input — re-evaluate join button on typing
+  document.getElementById('info-phrase-input').addEventListener('input', function() {
+    updateStatus(queueData);
   });
 
   // ── Join Queue button
