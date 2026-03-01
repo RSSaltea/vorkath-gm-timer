@@ -1255,6 +1255,24 @@ body.browser-view .vgt-skipped-panel {
   background: rgba(76, 175, 80, 0.3);
 }
 
+.vgt-skip-complete-btn {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  background: rgba(74, 158, 255, 0.15);
+  color: #4a9eff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  margin-left: 3px;
+}
+
+.vgt-skip-complete-btn:hover {
+  background: rgba(74, 158, 255, 0.3);
+}
+
 .vgt-skipped-empty {
   text-align: center;
   color: var(--text-muted);

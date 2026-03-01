@@ -638,6 +638,7 @@ function renderSkippedPanel() {
     html += '<div class="vgt-skipped-item">' +
       '<span class="vgt-skipped-name">' + escapeHtml(skippedData[i]) + '</span>' +
       '<button class="vgt-unskip-btn" data-name="' + escapeHtml(skippedData[i]) + '">Unskip</button>' +
+      '<button class="vgt-skip-complete-btn" data-name="' + escapeHtml(skippedData[i]) + '">Complete</button>' +
       '</div>';
   }
   listEl.innerHTML = html;
@@ -1176,22 +1177,45 @@ function init() {
     });
   });
 
-  // ── Unskip delegation ────────────────────────────────────────────
+  // ── Skipped panel delegation ─────────────────────────────────────
   document.getElementById('skipped-list').addEventListener('click', async function(e) {
-    var btn = e.target.closest('.vgt-unskip-btn');
-    if (!btn || !calibrated) return;
-    var name = btn.getAttribute('data-name');
-    btn.disabled = true;
-    btn.textContent = '...';
-    try {
-      var result = await sb.rpc('admin_unskip', { pass: adminPass, player_name: name });
-      if (result.error) throw result.error;
-      skippedData = skippedData.filter(function(n) { return n !== name; });
-      renderSkippedPanel();
-    } catch (err) {
-      console.warn('[VGT] Unskip failed:', err);
-      btn.disabled = false;
-      btn.textContent = 'Unskip';
+    if (!calibrated) return;
+
+    // Unskip → back to queue
+    var unskipBtn = e.target.closest('.vgt-unskip-btn');
+    if (unskipBtn && !unskipBtn.disabled) {
+      var name = unskipBtn.getAttribute('data-name');
+      unskipBtn.disabled = true;
+      unskipBtn.textContent = '...';
+      try {
+        var result = await sb.rpc('admin_unskip', { pass: adminPass, player_name: name });
+        if (result.error) throw result.error;
+        skippedData = skippedData.filter(function(n) { return n !== name; });
+        renderSkippedPanel();
+      } catch (err) {
+        console.warn('[VGT] Unskip failed:', err);
+        unskipBtn.disabled = false;
+        unskipBtn.textContent = 'Unskip';
+      }
+      return;
+    }
+
+    // Complete → move from skipped to completed
+    var completeBtn = e.target.closest('.vgt-skip-complete-btn');
+    if (completeBtn && !completeBtn.disabled) {
+      var cName = completeBtn.getAttribute('data-name');
+      completeBtn.disabled = true;
+      completeBtn.textContent = '...';
+      try {
+        var result = await sb.rpc('admin_skip_to_complete', { pass: adminPass, player_name: cName });
+        if (result.error) throw result.error;
+        skippedData = skippedData.filter(function(n) { return n !== cName; });
+        renderSkippedPanel();
+      } catch (err) {
+        console.warn('[VGT] Skip to complete failed:', err);
+        completeBtn.disabled = false;
+        completeBtn.textContent = 'Complete';
+      }
     }
   });
 }
