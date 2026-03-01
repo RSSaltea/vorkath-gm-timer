@@ -29,7 +29,7 @@ var calibrated      = false;
 var adminPass       = '';
 var lastPingCheck   = new Date().toISOString();
 var completedData   = [];
-var sessionActive   = localStorage.getItem('vgt-session-active') === 'true';
+var sessionActive   = false;
 var sessionKillCount = 0;
 var skippedData     = [];
 var skippedPanelOpen = false;
@@ -168,14 +168,17 @@ async function fetchPings() {
   }
 }
 
-async function fetchSessionCount() {
+async function fetchSessionState() {
   try {
-    var result = await sb.from('app_state').select('value').eq('key', 'session_kills').single();
+    var result = await sb.from('app_state').select('key, value').in('key', ['session_kills', 'session_active']);
     if (result.error) throw result.error;
-    sessionKillCount = parseInt(result.data.value, 10) || 0;
+    for (var i = 0; i < result.data.length; i++) {
+      if (result.data[i].key === 'session_kills') sessionKillCount = parseInt(result.data[i].value, 10) || 0;
+      if (result.data[i].key === 'session_active') sessionActive = result.data[i].value === 'true';
+    }
     updateSessionDisplay();
   } catch (err) {
-    console.warn('[VGT] Session count fetch failed:', err);
+    console.warn('[VGT] Session state fetch failed:', err);
   }
 }
 
@@ -562,7 +565,7 @@ async function refresh() {
 
   var fetches = [fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats()];
   if (calibrated) {
-    fetches.push(fetchSessionCount());
+    fetches.push(fetchSessionState());
     fetches.push(fetchSkipped());
   }
   var results = await Promise.all(fetches);
@@ -991,8 +994,7 @@ function init() {
       toggleCompletedSidePanel(true);
       toggleChatPanel(true);
     }
-    fetchSessionCount();
-    updateSessionDisplay();
+    fetchSessionState();
     updateToggleOpenBtn();
   }
 
@@ -1242,7 +1244,6 @@ function init() {
       if (result.error) throw result.error;
       sessionActive = true;
       sessionKillCount = 0;
-      localStorage.setItem('vgt-session-active', 'true');
       updateSessionDisplay();
     } catch (err) {
       console.warn('[VGT] Session start failed:', err);
@@ -1250,10 +1251,18 @@ function init() {
     this.disabled = false;
   });
 
-  document.getElementById('ac-session-end').addEventListener('click', function() {
-    sessionActive = false;
-    localStorage.setItem('vgt-session-active', 'false');
-    updateSessionDisplay();
+  document.getElementById('ac-session-end').addEventListener('click', async function() {
+    if (!calibrated) return;
+    this.disabled = true;
+    try {
+      var result = await sb.rpc('admin_session_end', { pass: adminPass });
+      if (result.error) throw result.error;
+      sessionActive = false;
+      updateSessionDisplay();
+    } catch (err) {
+      console.warn('[VGT] Session end failed:', err);
+    }
+    this.disabled = false;
   });
 
   // ── World input (admin controls panel) ─────────────────────────
