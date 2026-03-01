@@ -1360,6 +1360,27 @@ body.browser-view .vgt-completed-side-panel {
   outline: none;
 }
 
+.vgt-completed-side-skip {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+  margin-left: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.vgt-completed-side-skip:hover {
+  color: #ff5252;
+}
+
+.vgt-completed-side-skip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .vgt-completed-side-empty {
   text-align: center;
   color: var(--text-muted);

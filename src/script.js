@@ -700,6 +700,7 @@ function renderCompletedSidePanel(filter) {
   for (var i = 0; i < filtered.length; i++) {
     html += '<div class="vgt-completed-side-item">' +
       '<span class="vgt-completed-side-name" data-original="' + escapeHtml(filtered[i]) + '">' + escapeHtml(filtered[i]) + '</span>' +
+      '<button class="vgt-completed-side-skip" data-name="' + escapeHtml(filtered[i]) + '" title="Move to skipped">\u2717</button>' +
       '</div>';
   }
   listEl.innerHTML = html;
@@ -1091,9 +1092,31 @@ function init() {
     renderCompletedSidePanel(this.value.trim());
   });
 
-  // ── Completed side panel name editing ──────────────────────────
+  // ── Completed side panel actions ────────────────────────────────
   document.getElementById('completed-side-list').addEventListener('click', function(e) {
     if (!calibrated) return;
+
+    // Move to skipped (X button)
+    var skipBtn = e.target.closest('.vgt-completed-side-skip');
+    if (skipBtn && !skipBtn.disabled) {
+      var skipName = skipBtn.getAttribute('data-name');
+      skipBtn.disabled = true;
+      skipBtn.textContent = '...';
+      sb.rpc('admin_uncomplete_to_skip', { pass: adminPass, player_name: skipName })
+        .then(function(result) {
+          if (result.error) throw result.error;
+          var item = skipBtn.closest('.vgt-completed-side-item');
+          if (item) item.remove();
+        })
+        .catch(function(err) {
+          console.warn('[VGT] Uncomplete to skip failed:', err);
+          skipBtn.disabled = false;
+          skipBtn.textContent = '\u2717';
+        });
+      return;
+    }
+
+    // Inline name editing
     var nameEl = e.target.closest('.vgt-completed-side-name');
     if (!nameEl || nameEl.classList.contains('editing')) return;
 
