@@ -34,6 +34,7 @@ var sessionKillCount = 0;
 var skippedData     = [];
 var skippedPanelOpen = false;
 var completedSidePanelOpen = false;
+var adminControlsPanelOpen = false;
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -300,19 +301,19 @@ function setCard(el, state) {
 // ── Queue tab ─────────────────────────────────────────────────────
 
 function updateToggleOpenBtn() {
-  var btn = document.getElementById('toggle-open-btn');
-  if (!btn) return;
-  if (calibrated) {
-    btn.style.display = '';
-    if (submissionsOpen) {
-      btn.textContent = 'Open';
-      btn.classList.add('open');
-    } else {
-      btn.textContent = 'Closed';
-      btn.classList.remove('open');
-    }
+  var statusEl = document.getElementById('ac-submissions-status');
+  var toggleBtn = document.getElementById('ac-toggle-submissions');
+  if (!statusEl || !toggleBtn) return;
+  if (submissionsOpen) {
+    statusEl.textContent = 'Open';
+    statusEl.className = 'vgt-ac-status open';
+    toggleBtn.textContent = 'Close';
+    toggleBtn.className = 'vgt-ac-btn toggle open-state';
   } else {
-    btn.style.display = 'none';
+    statusEl.textContent = 'Closed';
+    statusEl.className = 'vgt-ac-status closed';
+    toggleBtn.textContent = 'Open';
+    toggleBtn.className = 'vgt-ac-btn toggle';
   }
 }
 
@@ -605,18 +606,19 @@ function setupRealtime() {
 // ── Session Tracking ─────────────────────────────────────────────
 
 function updateSessionDisplay() {
-  var countEl = document.getElementById('session-count');
-  var startBtn = document.getElementById('session-start-btn');
-  var endBtn = document.getElementById('session-end-btn');
+  var statusEl = document.getElementById('ac-session-status');
+  var countEl = document.getElementById('ac-session-count');
+  var startBtn = document.getElementById('ac-session-start');
+  var endBtn = document.getElementById('ac-session-end');
   if (!countEl) return;
 
   countEl.textContent = 'Kills: ' + sessionKillCount;
   if (sessionActive) {
-    countEl.classList.add('active');
+    if (statusEl) { statusEl.textContent = 'Active'; statusEl.className = 'vgt-ac-status active'; }
     startBtn.style.display = 'none';
     endBtn.style.display = '';
   } else {
-    countEl.classList.remove('active');
+    if (statusEl) { statusEl.textContent = 'Inactive'; statusEl.className = 'vgt-ac-status inactive'; }
     startBtn.style.display = '';
     endBtn.style.display = 'none';
   }
@@ -679,6 +681,27 @@ function toggleCompletedSidePanel(show) {
   } else {
     panel.style.display = 'none';
     app.classList.remove('panel-open-left');
+  }
+}
+
+// ── Admin Controls Panel (admin, far left) ───────────────────────
+
+function toggleAdminControlsPanel(show) {
+  if (!document.body.classList.contains('browser-view')) return;
+  var panel = document.getElementById('admin-controls-panel');
+  var completedPanel = document.getElementById('completed-side-panel');
+  if (!panel) return;
+
+  adminControlsPanelOpen = typeof show === 'boolean' ? show : !adminControlsPanelOpen;
+
+  if (adminControlsPanelOpen) {
+    panel.style.display = 'flex';
+    if (completedPanel) completedPanel.classList.add('has-neighbor-left');
+    updateToggleOpenBtn();
+    updateSessionDisplay();
+  } else {
+    panel.style.display = 'none';
+    if (completedPanel) completedPanel.classList.remove('has-neighbor-left');
   }
 }
 
@@ -801,9 +824,11 @@ function init() {
       tab.classList.add('active');
       document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
       if (calibrated && tab.dataset.tab === 'queue') {
+        toggleAdminControlsPanel(true);
         toggleSkippedPanel(true);
         toggleCompletedSidePanel(true);
       } else {
+        toggleAdminControlsPanel(false);
         toggleSkippedPanel(false);
         toggleCompletedSidePanel(false);
       }
@@ -857,16 +882,16 @@ function init() {
     var ab = document.getElementById('admin-btn');
     ab.textContent = 'Admin \u2713';
     ab.classList.add('active');
-    updateToggleOpenBtn();
     updateQueueList(queueData);
-    document.getElementById('session-controls').style.display = 'flex';
     var activeTab = document.querySelector('.vgt-tab.active');
     if (activeTab && activeTab.dataset.tab === 'queue') {
+      toggleAdminControlsPanel(true);
       toggleSkippedPanel(true);
       toggleCompletedSidePanel(true);
     }
     fetchSessionCount();
     updateSessionDisplay();
+    updateToggleOpenBtn();
   }
 
   function deactivateAdmin() {
@@ -879,7 +904,7 @@ function init() {
     var ab = document.getElementById('admin-btn');
     ab.textContent = 'Admin';
     ab.classList.remove('active');
-    document.getElementById('session-controls').style.display = 'none';
+    toggleAdminControlsPanel(false);
     toggleSkippedPanel(false);
     toggleCompletedSidePanel(false);
     updateQueueList(queueData);
@@ -1061,8 +1086,8 @@ function init() {
       .catch(function(err) { console.warn('[VGT] Move failed:', err); });
   });
 
-  // ── Toggle open/closed button ─────────────────────────────────
-  document.getElementById('toggle-open-btn').addEventListener('click', async function() {
+  // ── Admin controls panel buttons ─────────────────────────────
+  document.getElementById('ac-toggle-submissions').addEventListener('click', async function() {
     if (!calibrated) return;
     var btn = this;
     btn.disabled = true;
@@ -1105,8 +1130,8 @@ function init() {
     this.style.display = 'none';
   });
 
-  // ── Session Start / End buttons ──────────────────────────────────
-  document.getElementById('session-start-btn').addEventListener('click', async function() {
+  // ── Session Start / End buttons (admin controls panel) ──────────
+  document.getElementById('ac-session-start').addEventListener('click', async function() {
     if (!calibrated) return;
     this.disabled = true;
     try {
@@ -1122,7 +1147,7 @@ function init() {
     this.disabled = false;
   });
 
-  document.getElementById('session-end-btn').addEventListener('click', function() {
+  document.getElementById('ac-session-end').addEventListener('click', function() {
     sessionActive = false;
     localStorage.setItem('vgt-session-active', 'false');
     updateSessionDisplay();

@@ -22,6 +22,29 @@
 
   <div class="vgt-layout">
 
+  <!-- Admin controls panel (admin, far left) -->
+  <div class="vgt-admin-controls-panel" id="admin-controls-panel" style="display:none;">
+    <div class="vgt-ac-header"><span>Controls</span></div>
+
+    <div class="vgt-ac-section">
+      <div class="vgt-ac-label">Session</div>
+      <div class="vgt-ac-desc">Track kills for today's session</div>
+      <div class="vgt-ac-status" id="ac-session-status">Inactive</div>
+      <div class="vgt-ac-count" id="ac-session-count">Kills: 0</div>
+      <div class="vgt-ac-btns">
+        <button class="vgt-ac-btn start" id="ac-session-start">Start</button>
+        <button class="vgt-ac-btn end" id="ac-session-end" style="display:none;">End</button>
+      </div>
+    </div>
+
+    <div class="vgt-ac-section">
+      <div class="vgt-ac-label">Submissions</div>
+      <div class="vgt-ac-desc">Allow players to join queue</div>
+      <div class="vgt-ac-status" id="ac-submissions-status">Open</div>
+      <button class="vgt-ac-btn toggle" id="ac-toggle-submissions">Close</button>
+    </div>
+  </div>
+
   <!-- Completed side panel (admin, left) -->
   <div class="vgt-completed-side-panel" id="completed-side-panel" style="display:none;">
     <div class="vgt-completed-side-header">
@@ -112,12 +135,6 @@
 
       <div class="vgt-queue-header">
         <div class="vgt-label">Current Queue</div>
-        <div class="vgt-session-controls" id="session-controls" style="display:none;">
-          <span class="vgt-session-count" id="session-count">Kills: 0</span>
-          <button class="vgt-session-btn start" id="session-start-btn">Start</button>
-          <button class="vgt-session-btn end" id="session-end-btn" style="display:none;">End</button>
-        </div>
-        <button class="vgt-toggle-open-btn" id="toggle-open-btn" style="display:none;">Closed</button>
         <button class="vgt-refresh-btn" id="refresh-btn-queue">↻ Refresh</button>
       </div>
 
