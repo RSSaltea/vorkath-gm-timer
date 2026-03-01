@@ -697,6 +697,8 @@ function toggleAdminControlsPanel(show) {
   if (adminControlsPanelOpen) {
     panel.style.display = 'flex';
     if (completedPanel) completedPanel.classList.add('has-neighbor-left');
+    var worldInput = document.getElementById('ac-world-input');
+    if (worldInput) worldInput.value = currentWorld;
     updateToggleOpenBtn();
     updateSessionDisplay();
   } else {
@@ -1151,6 +1153,23 @@ function init() {
     sessionActive = false;
     localStorage.setItem('vgt-session-active', 'false');
     updateSessionDisplay();
+  });
+
+  // ── World input (admin controls panel) ─────────────────────────
+  var worldDebounce = null;
+  document.getElementById('ac-world-input').addEventListener('input', function() {
+    var val = this.value.trim();
+    clearTimeout(worldDebounce);
+    worldDebounce = setTimeout(function() {
+      if (!calibrated) return;
+      currentWorld = val;
+      var el = document.getElementById('vgt-world');
+      if (el) el.textContent = val ? 'World: ' + val : '';
+      sb.from('app_state').update({ value: val }).eq('key', 'world')
+        .then(function(res) {
+          if (res.error) console.warn('[VGT] World update failed:', res.error);
+        });
+    }, 500);
   });
 
   // ── Completed side panel search ──────────────────────────────────

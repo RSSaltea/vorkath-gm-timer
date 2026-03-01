@@ -1553,3 +1553,19 @@ body.browser-view .vgt-admin-controls-panel {
 .vgt-ac-btn.toggle.open-state:hover {
   background: rgba(76, 175, 80, 0.35);
 }
+
+.vgt-ac-world-input {
+  width: 100%;
+  padding: 4px 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+
+.vgt-ac-world-input:focus {
+  border-color: var(--accent);
+}
