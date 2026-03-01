@@ -327,6 +327,8 @@ function updateToggleOpenBtn() {
 function updateQueueList(queue) {
   updateToggleOpenBtn();
   var listEl = document.getElementById('queue-list');
+  var countEl = document.getElementById('queue-count');
+  if (countEl) countEl.textContent = queue ? queue.length : 0;
 
   // Skip re-render if an inline name edit is in progress
   if (listEl.querySelector('.vgt-queue-name.editing')) return;
