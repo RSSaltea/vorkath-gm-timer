@@ -164,6 +164,11 @@
     });
 
     fetchCompleted();
+
+    // Realtime subscription
+    sb.channel('completed-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'completed' }, function() { fetchCompleted(); })
+      .subscribe();
   </script>
 </body>
 </html>

@@ -12,7 +12,6 @@ var SUPABASE_URL = 'https://gogwmrnsofnqkjjxyskt.supabase.co';
 var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvZ3dtcm5zb2ZucWtqanh5c2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNjE1OTcsImV4cCI6MjA4NzkzNzU5N30.Pw__3qey7A9dV2hjzei-9VNUY4Jc7unVFUGgU-3nTdk';
 var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-var REFRESH_MS          = 5000;
 var HEARTBEAT_MS        = 15000;
 var ONLINE_THRESHOLD_MS = 20000;
 var INFO_CODE           = 'dragon fire';
@@ -21,9 +20,9 @@ var INFO_CODE           = 'dragon fire';
 var queueData       = [];
 var wasFirst        = false;
 var wasInTopThree   = false;
-var refreshTimer    = null;
 var submissionsOpen = true;
 var heartbeatTimer  = null;
+var realtimeDebounce = null;
 var heartbeatData   = {};
 var currentWorld    = '';
 var calibrated      = false;
@@ -316,6 +315,9 @@ function updateQueueList(queue) {
   updateToggleOpenBtn();
   var listEl = document.getElementById('queue-list');
 
+  // Skip re-render if an inline name edit is in progress
+  if (listEl.querySelector('.vgt-queue-name.editing')) return;
+
   if (!queue) {
     listEl.innerHTML = '<div class="vgt-queue-state">Failed to load queue.</div>';
     return;
@@ -527,7 +529,6 @@ async function runAction(action, name, btnEl) {
       sessionKillCount++;
       updateSessionDisplay();
     }
-    setTimeout(refresh, 1500);
   } catch (err) {
     console.warn('[VGT] Action failed:', err);
     btnEl.textContent = '!';
@@ -569,6 +570,31 @@ async function refresh() {
   updateStatus(queue);
   updateQueueList(queue);
   updateTimestamp();
+}
+
+// ── Realtime subscriptions ────────────────────────────────────────
+
+function onRealtimeChange() {
+  clearTimeout(realtimeDebounce);
+  realtimeDebounce = setTimeout(refresh, 300);
+}
+
+function setupRealtime() {
+  sb.channel('vgt-realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, onRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, onRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'skipped' }, onRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'completed' }, function() {
+      fetchCompleted();
+      onRealtimeChange();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pings' }, function() {
+      fetchPings();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'heartbeats' }, function() {
+      fetchHeartbeats();
+    })
+    .subscribe();
 }
 
 // ── Session Tracking ─────────────────────────────────────────────
@@ -755,13 +781,10 @@ function init() {
 
   // ── Initial load
   refresh();
-
-  // ── Auto-refresh
-  refreshTimer = setInterval(refresh, REFRESH_MS);
-
-  // ── Completed list — refresh every 60 s
   fetchCompleted();
-  setInterval(fetchCompleted, 60000);
+
+  // ── Realtime — instant updates from Supabase
+  setupRealtime();
 
   // ── Heartbeat — announce presence every 15 s
   sendHeartbeat();
@@ -891,7 +914,6 @@ function init() {
           nameEl.textContent = newName;
           nameEl.classList.remove('editing');
           sb.rpc('admin_edit_name', { pass: adminPass, old_name: original, new_name: newName })
-            .then(function() { setTimeout(refresh, 1500); })
             .catch(function(err) { console.warn('[VGT] Edit failed:', err); });
         } else {
           nameEl.textContent = original;
@@ -940,7 +962,6 @@ function init() {
     updateQueueList(queueData);
 
     sb.rpc('admin_move_queue', { pass: adminPass, player_name: movedName, direction: dir })
-      .then(function() { setTimeout(refresh, 2000); })
       .catch(function(err) { console.warn('[VGT] Move failed:', err); });
   });
 
@@ -1023,7 +1044,6 @@ function init() {
       if (result.error) throw result.error;
       skippedData = skippedData.filter(function(n) { return n !== name; });
       renderSkippedPanel();
-      setTimeout(refresh, 1500);
     } catch (err) {
       console.warn('[VGT] Unskip failed:', err);
       btn.disabled = false;

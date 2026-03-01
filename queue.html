@@ -235,9 +235,12 @@
     fetchQueue();
     fetchStats();
     fetchWorld();
-    setInterval(fetchQueue, 10000);
-    setInterval(fetchStats, 10000);
-    setInterval(fetchWorld, 10000);
+
+    // Realtime subscriptions
+    sb.channel('queue-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, function() { fetchQueue(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, function() { fetchStats(); fetchWorld(); })
+      .subscribe();
   </script>
 </body>
 </html>
