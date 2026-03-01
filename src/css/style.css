@@ -1569,3 +1569,134 @@ body.browser-view .vgt-admin-controls-panel {
 .vgt-ac-world-input:focus {
   border-color: var(--accent);
 }
+
+/* ── Admin Chat Panel (admin, far right) ─────────────────────── */
+.vgt-chat-panel {
+  width: 220px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 12px 12px 0;
+  box-shadow: 4px 4px 24px rgba(0,0,0,0.4);
+  padding: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+body.browser-view .vgt-chat-panel {
+  margin-top: 0;
+}
+
+.vgt-chat-header {
+  display: flex;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #bb86fc;
+}
+
+.vgt-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+  min-height: 0;
+}
+
+.vgt-chat-msg {
+  padding: 5px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.vgt-chat-msg-name {
+  font-weight: 600;
+  color: #bb86fc;
+  margin-right: 4px;
+}
+
+.vgt-chat-msg-time {
+  font-size: 9px;
+  color: var(--text-muted);
+  float: right;
+  margin-left: 6px;
+  line-height: 1.6;
+}
+
+.vgt-chat-msg-text {
+  color: var(--text);
+  margin-top: 2px;
+}
+
+.vgt-chat-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 12px 4px;
+}
+
+.vgt-chat-input-wrap {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.vgt-chat-input {
+  flex: 1;
+  padding: 5px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+  min-width: 0;
+}
+
+.vgt-chat-input:focus {
+  border-color: var(--accent);
+}
+
+.vgt-chat-input::placeholder {
+  color: var(--text-muted);
+}
+
+.vgt-chat-send {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 10px;
+  background: rgba(187, 134, 252, 0.2);
+  color: #bb86fc;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.vgt-chat-send:hover {
+  background: rgba(187, 134, 252, 0.35);
+}
+
+.vgt-chat-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* When chat panel is open, skipped loses its right border-radius */
+.vgt-skipped-panel.has-neighbor-right {
+  border-radius: 0;
+  border-right: none;
+  box-shadow: none;
+}

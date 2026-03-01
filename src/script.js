@@ -35,6 +35,8 @@ var skippedData     = [];
 var skippedPanelOpen = false;
 var completedSidePanelOpen = false;
 var adminControlsPanelOpen = false;
+var chatPanelOpen = false;
+var chatMessages = [];
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -600,6 +602,9 @@ function setupRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'heartbeats' }, function() {
       fetchHeartbeats();
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_chat' }, function() {
+      if (chatPanelOpen) fetchAdminChat();
+    })
     .subscribe();
 }
 
@@ -734,6 +739,87 @@ function renderCompletedSidePanel(filter) {
   listEl.innerHTML = html;
 }
 
+// ── Admin Chat ────────────────────────────────────────────────────
+
+async function fetchAdminChat() {
+  try {
+    var result = await sb.from('admin_chat').select('*').order('created_at', { ascending: true }).limit(100);
+    if (result.error) throw result.error;
+    chatMessages = result.data || [];
+    renderChatMessages();
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch chat:', err);
+  }
+}
+
+function renderChatMessages() {
+  var el = document.getElementById('chat-messages');
+  if (!el) return;
+
+  if (chatMessages.length === 0) {
+    el.innerHTML = '<div class="vgt-chat-empty">No messages yet</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < chatMessages.length; i++) {
+    var m = chatMessages[i];
+    var time = '';
+    try {
+      var d = new Date(m.created_at);
+      time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {}
+    html += '<div class="vgt-chat-msg">' +
+      '<span class="vgt-chat-msg-time">' + escapeHtml(time) + '</span>' +
+      '<span class="vgt-chat-msg-name">' + escapeHtml(m.sender || 'Admin') + '</span>' +
+      '<div class="vgt-chat-msg-text">' + escapeHtml(m.message) + '</div>' +
+      '</div>';
+  }
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendChatMessage() {
+  var input = document.getElementById('chat-input');
+  var msg = input.value.trim();
+  if (!msg || !calibrated) return;
+
+  var sender = getEffectiveName() || 'Admin';
+  var btn = document.getElementById('chat-send-btn');
+  btn.disabled = true;
+  input.disabled = true;
+
+  try {
+    var result = await sb.rpc('send_admin_chat', { pass: adminPass, msg: msg, sender_name: sender });
+    if (result.error) throw result.error;
+    input.value = '';
+  } catch (err) {
+    console.warn('[VGT] Send chat failed:', err);
+  }
+
+  btn.disabled = false;
+  input.disabled = false;
+  input.focus();
+}
+
+function toggleChatPanel(show) {
+  if (!document.body.classList.contains('browser-view')) return;
+  var panel = document.getElementById('chat-panel');
+  var skippedPanel = document.getElementById('skipped-panel');
+  if (!panel) return;
+
+  chatPanelOpen = typeof show === 'boolean' ? show : !chatPanelOpen;
+
+  if (chatPanelOpen) {
+    panel.style.display = 'flex';
+    if (skippedPanel) skippedPanel.classList.add('has-neighbor-right');
+    fetchAdminChat();
+  } else {
+    panel.style.display = 'none';
+    if (skippedPanel) skippedPanel.classList.remove('has-neighbor-right');
+  }
+}
+
 // ── Join Queue ────────────────────────────────────────────────────
 
 var lastSubmittedName = '';
@@ -829,10 +915,12 @@ function init() {
         toggleAdminControlsPanel(true);
         toggleSkippedPanel(true);
         toggleCompletedSidePanel(true);
+        toggleChatPanel(true);
       } else {
         toggleAdminControlsPanel(false);
         toggleSkippedPanel(false);
         toggleCompletedSidePanel(false);
+        toggleChatPanel(false);
       }
     });
   });
@@ -890,6 +978,7 @@ function init() {
       toggleAdminControlsPanel(true);
       toggleSkippedPanel(true);
       toggleCompletedSidePanel(true);
+      toggleChatPanel(true);
     }
     fetchSessionCount();
     updateSessionDisplay();
@@ -909,6 +998,7 @@ function init() {
     toggleAdminControlsPanel(false);
     toggleSkippedPanel(false);
     toggleCompletedSidePanel(false);
+    toggleChatPanel(false);
     updateQueueList(queueData);
   }
 
@@ -1259,6 +1349,12 @@ function init() {
         nameEl.classList.remove('editing');
       }
     });
+  });
+
+  // ── Admin chat send ────────────────────────────────────────────────
+  document.getElementById('chat-send-btn').addEventListener('click', sendChatMessage);
+  document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
   });
 
   // ── Skipped panel delegation ─────────────────────────────────────
