@@ -254,6 +254,9 @@
     fetchStats();
     fetchWorld();
 
+    // Poll stats/world every 10s as fallback
+    setInterval(function() { fetchStats(); fetchWorld(); }, 10000);
+
     // Realtime subscriptions
     sb.channel('queue-page')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, function() { fetchQueue(); })
