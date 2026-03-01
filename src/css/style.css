@@ -774,7 +774,7 @@ body.nis {
 
 /* ── Info Side Panel (right of app, Info tab) ─────────────────── */
 .vgt-info-side-panel {
-  width: 220px;
+  width: 286px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-left: none;
