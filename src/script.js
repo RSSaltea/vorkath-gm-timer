@@ -107,7 +107,7 @@ async function fetchStats() {
 
 async function fetchCompleted() {
   try {
-    var result = await sb.from('completed').select('name').order('completed_at', { ascending: true });
+    var result = await sb.from('completed').select('name').order('id', { ascending: false });
     if (result.error) throw result.error;
     completedData = result.data ? result.data.map(function(r) { return r.name; }) : [];
     updateCompletedPanel();
