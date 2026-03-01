@@ -846,6 +846,64 @@ function init() {
   sendHeartbeat();
   heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
 
+  // ── Admin helpers ───────────────────────────────────────────────
+  function activateAdmin(pass) {
+    calibrated = true;
+    adminPass = pass;
+    try {
+      localStorage.setItem('vgt_adminPass', pass);
+      localStorage.setItem('vgt_adminExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    } catch (e) {}
+    var ab = document.getElementById('admin-btn');
+    ab.textContent = 'Admin \u2713';
+    ab.classList.add('active');
+    updateToggleOpenBtn();
+    updateQueueList(queueData);
+    document.getElementById('session-controls').style.display = 'flex';
+    var activeTab = document.querySelector('.vgt-tab.active');
+    if (activeTab && activeTab.dataset.tab === 'queue') {
+      toggleSkippedPanel(true);
+      toggleCompletedSidePanel(true);
+    }
+    fetchSessionCount();
+    updateSessionDisplay();
+  }
+
+  function deactivateAdmin() {
+    calibrated = false;
+    adminPass = '';
+    try {
+      localStorage.removeItem('vgt_adminPass');
+      localStorage.removeItem('vgt_adminExpiry');
+    } catch (e) {}
+    var ab = document.getElementById('admin-btn');
+    ab.textContent = 'Admin';
+    ab.classList.remove('active');
+    document.getElementById('session-controls').style.display = 'none';
+    toggleSkippedPanel(false);
+    toggleCompletedSidePanel(false);
+    updateQueueList(queueData);
+  }
+
+  // ── Auto-login from saved session ─────────────────────────────
+  try {
+    var savedPass = localStorage.getItem('vgt_adminPass');
+    var savedExpiry = localStorage.getItem('vgt_adminExpiry');
+    if (savedPass && savedExpiry && Date.now() < Number(savedExpiry)) {
+      sb.rpc('check_admin', { pass: savedPass }).then(function(result) {
+        if (result.data === true) {
+          activateAdmin(savedPass);
+        } else {
+          localStorage.removeItem('vgt_adminPass');
+          localStorage.removeItem('vgt_adminExpiry');
+        }
+      });
+    } else {
+      localStorage.removeItem('vgt_adminPass');
+      localStorage.removeItem('vgt_adminExpiry');
+    }
+  } catch (e) {}
+
   // ── Admin login ──────────────────────────────────────────────────
   var adminBtn       = document.getElementById('admin-btn');
   var adminOverlay   = document.getElementById('admin-overlay');
@@ -856,14 +914,7 @@ function init() {
 
   adminBtn.addEventListener('click', function() {
     if (calibrated) {
-      calibrated = false;
-      adminPass = '';
-      adminBtn.textContent = 'Admin';
-      adminBtn.classList.remove('active');
-      document.getElementById('session-controls').style.display = 'none';
-      toggleSkippedPanel(false);
-      toggleCompletedSidePanel(false);
-      updateQueueList(queueData);
+      deactivateAdmin();
       return;
     }
     adminOverlay.style.display = 'flex';
@@ -884,21 +935,8 @@ function init() {
       var result = await sb.rpc('check_admin', { pass: entered });
       if (result.error) throw result.error;
       if (result.data === true) {
-        calibrated = true;
-        adminPass = entered;
+        activateAdmin(entered);
         adminOverlay.style.display = 'none';
-        adminBtn.textContent = 'Admin \u2713';
-        adminBtn.classList.add('active');
-        updateToggleOpenBtn();
-        updateQueueList(queueData);
-        document.getElementById('session-controls').style.display = 'flex';
-        var activeTab = document.querySelector('.vgt-tab.active');
-        if (activeTab && activeTab.dataset.tab === 'queue') {
-          toggleSkippedPanel(true);
-          toggleCompletedSidePanel(true);
-        }
-        fetchSessionCount();
-        updateSessionDisplay();
       } else {
         adminError.textContent = 'Invalid key';
         adminError.style.display = 'block';
