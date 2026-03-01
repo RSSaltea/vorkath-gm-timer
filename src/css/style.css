@@ -1142,13 +1142,15 @@ body.browser-view .vgt-layout {
   gap: 0;
   margin: 24px auto 0;
   max-width: max-content;
-  min-height: calc(100vh - 48px);
+  height: calc(100vh - 48px);
+  max-height: calc(100vh - 48px);
 }
 
 body.browser-view .vgt-layout .vgt-app {
   margin: 0;
   flex-shrink: 0;
   width: 380px;
+  overflow-y: auto;
 }
 
 body.browser-view .vgt-app.panel-open {
@@ -1228,6 +1230,7 @@ body.browser-view .vgt-app.panel-open-left {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 body.browser-view .vgt-skipped-panel {
@@ -1328,6 +1331,7 @@ body.browser-view .vgt-skipped-panel {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 body.browser-view .vgt-completed-side-panel {
@@ -1457,9 +1461,10 @@ body.browser-view .vgt-completed-side-panel {
   border-radius: 12px 0 0 12px;
   box-shadow: -4px 4px 24px rgba(0,0,0,0.4);
   padding: 10px;
-  overflow: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 body.browser-view .vgt-admin-controls-panel {
@@ -1618,6 +1623,7 @@ body.browser-view .vgt-admin-controls-panel {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 body.browser-view .vgt-chat-panel {
