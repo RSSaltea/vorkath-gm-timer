@@ -731,6 +731,10 @@ body.nis {
   margin-top: 1px;
 }
 
+.vgt-info-list li.vgt-info-circle::before {
+  content: '●';
+}
+
 /* shared button base */
 .vgt-info-btn {
   display: flex;
@@ -1605,7 +1609,7 @@ body.browser-view .vgt-chat-panel {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-top: 8px;
   min-height: 0;
 }
 

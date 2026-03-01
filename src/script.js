@@ -901,29 +901,40 @@ function init() {
   });
 
   // ── Tab switching
+  function switchToTab(tabName) {
+    document.querySelectorAll('.vgt-tab').forEach(function(t) {
+      t.classList.remove('active');
+    });
+    document.querySelectorAll('.vgt-page').forEach(function(p) {
+      p.classList.remove('active');
+    });
+    var tabBtn = document.querySelector('.vgt-tab[data-tab="' + tabName + '"]');
+    if (tabBtn) tabBtn.classList.add('active');
+    var tabPage = document.getElementById('tab-' + tabName);
+    if (tabPage) tabPage.classList.add('active');
+    try { localStorage.setItem('vgt_activeTab', tabName); } catch (e) {}
+    if (calibrated && tabName === 'queue') {
+      toggleAdminControlsPanel(true);
+      toggleSkippedPanel(true);
+      toggleCompletedSidePanel(true);
+      toggleChatPanel(true);
+    } else {
+      toggleAdminControlsPanel(false);
+      toggleSkippedPanel(false);
+      toggleCompletedSidePanel(false);
+      toggleChatPanel(false);
+    }
+  }
+
   document.querySelectorAll('.vgt-tab').forEach(function(tab) {
     tab.addEventListener('click', function() {
-      document.querySelectorAll('.vgt-tab').forEach(function(t) {
-        t.classList.remove('active');
-      });
-      document.querySelectorAll('.vgt-page').forEach(function(p) {
-        p.classList.remove('active');
-      });
-      tab.classList.add('active');
-      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-      if (calibrated && tab.dataset.tab === 'queue') {
-        toggleAdminControlsPanel(true);
-        toggleSkippedPanel(true);
-        toggleCompletedSidePanel(true);
-        toggleChatPanel(true);
-      } else {
-        toggleAdminControlsPanel(false);
-        toggleSkippedPanel(false);
-        toggleCompletedSidePanel(false);
-        toggleChatPanel(false);
-      }
+      switchToTab(tab.dataset.tab);
     });
   });
+
+  // Restore last active tab
+  var savedTab = localStorage.getItem('vgt_activeTab');
+  if (savedTab) switchToTab(savedTab);
 
   // ── Name input
   var nameDebounce = null;
