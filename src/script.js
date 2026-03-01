@@ -434,6 +434,20 @@ async function fetchWorld() {
   }
 }
 
+// ── Submissions Status Bar ────────────────────────────────────
+
+function updateSubmissionsStatus() {
+  var el = document.getElementById('submissions-status');
+  if (!el) return;
+  if (submissionsOpen) {
+    el.textContent = 'Submissions open';
+    el.className = 'vgt-submissions-status open';
+  } else {
+    el.textContent = 'Submissions closed';
+    el.className = 'vgt-submissions-status closed';
+  }
+}
+
 // ── Stats (Total / Today) ────────────────────────────────────────
 
 async function fetchStats() {
@@ -630,6 +644,7 @@ async function refresh() {
     setDot('error');
   }
 
+  updateSubmissionsStatus();
   updateStatus(queue);
   updateQueueList(queue);
   updateTimestamp();
@@ -811,6 +826,12 @@ function init() {
       });
       tab.classList.add('active');
       document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      // Show skipped panel only on queue tab when admin
+      if (calibrated && tab.dataset.tab === 'queue') {
+        toggleSkippedPanel(true);
+      } else {
+        toggleSkippedPanel(false);
+      }
     });
   });
 
@@ -895,7 +916,11 @@ function init() {
       updateToggleOpenBtn();
       updateQueueList(queueData);
       document.getElementById('session-controls').style.display = 'flex';
-      toggleSkippedPanel(true);
+      // Only show skipped panel if queue tab is active
+      var activeTab = document.querySelector('.vgt-tab.active');
+      if (activeTab && activeTab.dataset.tab === 'queue') {
+        toggleSkippedPanel(true);
+      }
       fetchSessionCount();
       updateSessionDisplay();
     } else {

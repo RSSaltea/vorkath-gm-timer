@@ -14,7 +14,7 @@
 
   <link rel="stylesheet" href="https://runeapps.org/nis/nis.css" />
   <link rel="stylesheet" href="./src/css/nis.css?v=1.0" />
-  <link rel="stylesheet" href="./src/css/style.css?v=2.3" />
+  <link rel="stylesheet" href="./src/css/style.css?v=2.4" />
 </head>
 <body class="nis">
 
@@ -24,9 +24,15 @@
     <!-- Header -->
     <header class="vgt-header">
       <div class="vgt-title">Vorkath GM Timer</div>
-      <div class="vgt-world" id="vgt-world"></div>
-      <div class="vgt-status-dot" id="vgt-dot" title="Connection status"></div>
+      <div class="vgt-header-right">
+        <div class="vgt-world" id="vgt-world"></div>
+        <div class="vgt-status-dot" id="vgt-dot" title="Connection status"></div>
+        <button class="vgt-admin-btn" id="admin-btn">Admin</button>
+      </div>
     </header>
+
+    <!-- Submissions status (visible on all tabs) -->
+    <div class="vgt-submissions-status open" id="submissions-status">Submissions open</div>
 
     <!-- Alt1 install banner (hidden in-app, shown in browser) -->
     <div class="vgt-alt1-banner" id="alt1-banner">
@@ -36,13 +42,13 @@
 
     <!-- Tabs -->
     <div class="vgt-tabs">
-      <button class="vgt-tab active" data-tab="status">Status</button>
+      <button class="vgt-tab" data-tab="status">Status</button>
       <button class="vgt-tab" data-tab="queue">Full Queue</button>
-      <button class="vgt-tab" data-tab="info">Info</button>
+      <button class="vgt-tab active" data-tab="info">Info</button>
     </div>
 
     <!-- ── STATUS TAB ── -->
-    <div class="vgt-page active" id="tab-status">
+    <div class="vgt-page" id="tab-status">
 
       <div class="vgt-name-card">
         <div class="vgt-label">Your RS Name</div>
@@ -72,7 +78,6 @@
       <div class="vgt-footer">
         <span id="last-updated">Not yet updated</span>
         <button class="vgt-refresh-btn" id="refresh-btn">↻ Refresh</button>
-        <button class="vgt-admin-btn" id="admin-btn">Admin</button>
       </div>
 
     </div>
@@ -110,7 +115,7 @@
     </div>
 
     <!-- ── INFO TAB ── -->
-    <div class="vgt-page" id="tab-info">
+    <div class="vgt-page active" id="tab-info">
 
       <div class="vgt-info-hero">
         <div class="vgt-info-stats">
@@ -185,7 +190,7 @@
 
   </div>
 
-  <script src="./src/script.js?v=3.23"></script>
+  <script src="./src/script.js?v=3.24"></script>
   <script src="./src/haunt-detector.js?v=2.2"></script>
   <script src="./src/chat-reader.js?v=2.7"></script>
 </body>
