@@ -1272,7 +1272,7 @@ function init() {
     queueData.splice(targetIdx, 0, movedName);
     updateQueueList(queueData);
 
-    sb.rpc('admin_reorder_queue', { pass: adminPass, player_name: movedName, new_pos: targetIdx })
+    sb.rpc('admin_reorder_queue', { pass: adminPass, player_name: movedName, new_position: targetIdx })
       .then(function(res) {
         if (res.error) { console.warn('[VGT] Reorder failed:', res.error); refresh(); }
       })
