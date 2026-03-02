@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ScoopyDooLaid Glow</title>
+<title>GM Aura</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -62,7 +62,7 @@ const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
 
 const img = new Image();
-img.src = 'src/img/scoobydoolaid.png';
+img.src = 'src/img/wazzysupersaiyan.png';
 
 const PADDING = 30;
 const BOLT_COUNT = 30;
@@ -409,7 +409,7 @@ function startRecording() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'scoobydoolaid_glow.gif';
+        a.download = 'wazzysupersaiyan_glow.gif';
         a.click();
         URL.revokeObjectURL(url);
         statusEl.textContent = `GIF saved! (${sizeMB} MB)`;
@@ -437,7 +437,7 @@ function saveFrame() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'scoobydoolaid_glow.png';
+    a.download = 'wazzysupersaiyan_glow.png';
     a.click();
     URL.revokeObjectURL(url);
     statusEl.textContent = 'PNG saved!';
