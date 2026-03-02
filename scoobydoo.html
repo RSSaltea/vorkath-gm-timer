@@ -307,14 +307,27 @@ function loop(ts) {
 }
 
 // --- GIF Recording ---
+let workerBlobUrl = null;
+
+// Pre-fetch the worker script as a blob to avoid cross-origin worker issues
+fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js')
+  .then(r => r.blob())
+  .then(blob => { workerBlobUrl = URL.createObjectURL(blob); })
+  .catch(() => console.warn('Could not pre-fetch gif worker'));
+
 function startRecording() {
+  if (!workerBlobUrl) {
+    statusEl.textContent = 'Worker not loaded yet, try again in a sec...';
+    setTimeout(() => statusEl.textContent = '', 2000);
+    return;
+  }
   statusEl.textContent = 'Recording... 0%';
   const gif = new GIF({
     workers: 2,
     quality: 8,
     width: W,
     height: H,
-    workerScript: 'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js',
+    workerScript: workerBlobUrl,
     transparent: null,
     background: '#000000'
   });
@@ -336,6 +349,9 @@ function startRecording() {
         URL.revokeObjectURL(url);
         statusEl.textContent = 'GIF saved!';
         setTimeout(() => statusEl.textContent = '', 3000);
+      });
+      gif.on('progress', p => {
+        statusEl.textContent = `Encoding GIF... ${Math.round(p * 100)}%`;
       });
       gif.render();
       return;
