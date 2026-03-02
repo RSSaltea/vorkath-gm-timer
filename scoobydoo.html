@@ -64,7 +64,7 @@ const statusEl = document.getElementById('status');
 const img = new Image();
 img.src = 'src/img/scoobydoo.png';
 
-const PADDING = 60;
+const PADDING = 120;
 const BOLT_COUNT = 18;
 const PARTICLE_COUNT = 70;
 
@@ -131,7 +131,7 @@ function extractEdgePoints() {
 
 function buildGlowLayers() {
   // Create multiple blurred silhouette layers in gold for the tight glow
-  const blurLevels = [8, 20, 40, 60];
+  const blurLevels = [10, 30, 60, 110, 170, 250];
   glowCanvases = blurLevels.map(blur => {
     const c = document.createElement('canvas');
     c.width = W;
