@@ -64,24 +64,99 @@ const statusEl = document.getElementById('status');
 const img = new Image();
 img.src = 'src/img/scoobydoo.png';
 
-// Config
 const PADDING = 80;
-const BOLT_COUNT = 14;
-const PARTICLE_COUNT = 60;
+const BOLT_COUNT = 18;
+const PARTICLE_COUNT = 70;
 
 let W, H, imgW, imgH, imgX, imgY;
 let t = 0;
 
+// Edge points extracted from the image silhouette
+let edgePoints = [];
+// Offscreen canvases for silhouette glow
+let silhouetteCanvas, silhouetteCtx;
+let glowCanvases = []; // pre-blurred glow layers
+
 img.onload = () => {
-  // Size canvas to image + padding for glow
   imgW = img.naturalWidth;
   imgH = img.naturalHeight;
   W = canvas.width = imgW + PADDING * 2;
   H = canvas.height = imgH + PADDING * 2;
   imgX = PADDING;
   imgY = PADDING;
+
+  // Extract silhouette and edge points
+  buildSilhouette();
+  extractEdgePoints();
+  buildGlowLayers();
+
   requestAnimationFrame(loop);
 };
+
+function buildSilhouette() {
+  // Draw image to offscreen canvas to read pixel data
+  silhouetteCanvas = document.createElement('canvas');
+  silhouetteCanvas.width = W;
+  silhouetteCanvas.height = H;
+  silhouetteCtx = silhouetteCanvas.getContext('2d');
+  silhouetteCtx.drawImage(img, imgX, imgY, imgW, imgH);
+}
+
+function extractEdgePoints() {
+  const data = silhouetteCtx.getImageData(0, 0, W, H).data;
+  const step = 3; // sample every 3 pixels for performance
+  edgePoints = [];
+
+  for (let y = 0; y < H; y += step) {
+    for (let x = 0; x < W; x += step) {
+      const idx = (y * W + x) * 4;
+      const a = data[idx + 3];
+      if (a < 30) continue; // transparent
+
+      // Check if this is an edge pixel (neighbor is transparent)
+      let isEdge = false;
+      const offsets = [[-step,0],[step,0],[0,-step],[0,step]];
+      for (const [dx, dy] of offsets) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) { isEdge = true; break; }
+        const ni = (ny * W + nx) * 4;
+        if (data[ni + 3] < 30) { isEdge = true; break; }
+      }
+      if (isEdge) {
+        edgePoints.push({ x, y });
+      }
+    }
+  }
+}
+
+function buildGlowLayers() {
+  // Create multiple blurred silhouette layers in gold for the tight glow
+  const blurLevels = [4, 10, 20, 35, 55];
+  glowCanvases = blurLevels.map(blur => {
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const gctx = c.getContext('2d');
+
+    // Draw the image as a gold silhouette
+    gctx.drawImage(img, imgX, imgY, imgW, imgH);
+    // Recolor to gold using composite
+    gctx.globalCompositeOperation = 'source-in';
+    gctx.fillStyle = '#ffd700';
+    gctx.fillRect(0, 0, W, H);
+    gctx.globalCompositeOperation = 'source-over';
+
+    // Now blur it
+    const c2 = document.createElement('canvas');
+    c2.width = W;
+    c2.height = H;
+    const g2 = c2.getContext('2d');
+    g2.filter = `blur(${blur}px)`;
+    g2.drawImage(c, 0, 0);
+    g2.filter = 'none';
+    return { canvas: c2, blur };
+  });
+}
 
 // Lightning bolt generation
 function bolt(x1, y1, x2, y2, depth) {
@@ -89,8 +164,8 @@ function bolt(x1, y1, x2, y2, depth) {
     ctx.lineTo(x2, y2);
     return;
   }
-  const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * (depth * 14);
-  const my = (y1 + y2) / 2 + (Math.random() - 0.5) * (depth * 14);
+  const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * (depth * 12);
+  const my = (y1 + y2) / 2 + (Math.random() - 0.5) * (depth * 12);
   bolt(x1, y1, mx, my, depth - 1);
   bolt(mx, my, x2, y2, depth - 1);
 }
@@ -106,7 +181,6 @@ function drawBolt(x1, y1, x2, y2, width, alpha) {
   ctx.moveTo(x1, y1);
   bolt(x1, y1, x2, y2, 4);
   ctx.stroke();
-  // brighter core
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = width * 0.4;
   ctx.shadowBlur = 8;
@@ -117,16 +191,17 @@ function drawBolt(x1, y1, x2, y2, width, alpha) {
   ctx.restore();
 }
 
-// Particles
+// Particles bound to edge points
 const particles = [];
 for (let i = 0; i < PARTICLE_COUNT; i++) {
   particles.push({
-    angle: Math.random() * Math.PI * 2,
-    dist: 0.4 + Math.random() * 0.6,
-    speed: 0.3 + Math.random() * 1.2,
+    edgeIdx: 0, // will be assigned to a random edge point
+    offsetX: 0,
+    offsetY: 0,
+    speed: 0.5 + Math.random() * 2,
     size: 1 + Math.random() * 2.5,
     phase: Math.random() * Math.PI * 2,
-    drift: (Math.random() - 0.5) * 0.02
+    progress: Math.random() // how far along the edge
   });
 }
 
@@ -134,87 +209,98 @@ function loop(ts) {
   t = ts * 0.001;
   ctx.clearRect(0, 0, W, H);
 
-  const cx = imgX + imgW / 2;
-  const cy = imgY + imgH / 2;
-  const rx = imgW / 2 + 20;
-  const ry = imgH / 2 + 20;
+  const pulse = 0.5 + 0.5 * Math.sin(t * 4);
 
-  // Outer aura glow layers
-  for (let i = 4; i >= 0; i--) {
-    const spread = 20 + i * 12;
-    const alpha = 0.06 + (4 - i) * 0.025;
+  // Draw silhouette glow layers (tight to the shape)
+  for (let i = glowCanvases.length - 1; i >= 0; i--) {
+    const layer = glowCanvases[i];
+    const alpha = (0.12 + (glowCanvases.length - i) * 0.06) + Math.sin(t * 3 + i) * 0.03;
     ctx.save();
-    ctx.globalAlpha = alpha + Math.sin(t * 3 + i) * 0.02;
-    ctx.shadowColor = '#ffd700';
-    ctx.shadowBlur = spread;
-    ctx.fillStyle = '#ffd700';
-    // Draw ellipse around the character
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx + i * 8, ry + i * 8, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.globalAlpha = Math.min(alpha, 0.7);
+    ctx.drawImage(layer.canvas, 0, 0);
     ctx.restore();
   }
 
-  // Pulsing inner glow
-  const pulse = 0.5 + 0.5 * Math.sin(t * 4);
+  // Extra pulsing tight glow
   ctx.save();
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry) + 30);
-  grad.addColorStop(0, `rgba(255, 215, 0, ${0.15 + pulse * 0.1})`);
-  grad.addColorStop(0.5, `rgba(255, 180, 0, ${0.08 + pulse * 0.05})`);
-  grad.addColorStop(1, 'rgba(255, 150, 0, 0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = 0.15 + pulse * 0.12;
+  ctx.drawImage(glowCanvases[2].canvas, 0, 0);
   ctx.restore();
 
   // Draw the character image
   ctx.save();
   ctx.shadowColor = '#ffd700';
-  ctx.shadowBlur = 15 + pulse * 10;
+  ctx.shadowBlur = 8 + pulse * 8;
   ctx.drawImage(img, imgX, imgY, imgW, imgH);
   ctx.restore();
 
-  // Lightning bolts radiating from character edges
-  for (let i = 0; i < BOLT_COUNT; i++) {
-    // Only draw some bolts each frame for flickering effect
-    if (Math.random() > 0.35) continue;
-    const angle = (i / BOLT_COUNT) * Math.PI * 2 + Math.sin(t * 2 + i) * 0.3;
-    const startR = 0.7;
-    const endR = 1.0 + Math.random() * 0.5;
-    const sx = cx + Math.cos(angle) * rx * startR;
-    const sy = cy + Math.sin(angle) * ry * startR;
-    const ex = cx + Math.cos(angle) * rx * endR;
-    const ey = cy + Math.sin(angle) * ry * endR;
-    const boltAlpha = 0.4 + Math.random() * 0.6;
-    drawBolt(sx, sy, ex, ey, 1 + Math.random() * 1.5, boltAlpha);
+  // Lightning bolts shooting from edge points outward
+  if (edgePoints.length > 0) {
+    for (let i = 0; i < BOLT_COUNT; i++) {
+      if (Math.random() > 0.3) continue;
+      const ep = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const cx = imgX + imgW / 2;
+      const cy = imgY + imgH / 2;
+      // Direction: outward from center through edge point
+      const dx = ep.x - cx;
+      const dy = ep.y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const nx = dx / dist;
+      const ny = dy / dist;
+      const boltLen = 25 + Math.random() * 50;
+      const ex = ep.x + nx * boltLen;
+      const ey = ep.y + ny * boltLen;
+      const boltAlpha = 0.4 + Math.random() * 0.5;
+      drawBolt(ep.x, ep.y, ex, ey, 1 + Math.random() * 1.5, boltAlpha);
+    }
+
+    // Occasional big flash bolt
+    if (Math.random() > 0.82) {
+      const ep = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const cx = imgX + imgW / 2;
+      const cy = imgY + imgH / 2;
+      const dx = ep.x - cx;
+      const dy = ep.y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const nx = dx / dist;
+      const ny = dy / dist;
+      const ex = ep.x + nx * (60 + Math.random() * 40);
+      const ey = ep.y + ny * (60 + Math.random() * 40);
+      drawBolt(ep.x, ep.y, ex, ey, 2.5, 0.85);
+    }
   }
 
-  // Bright flash bolts (occasional large ones)
-  if (Math.random() > 0.85) {
-    const angle = Math.random() * Math.PI * 2;
-    const sx = cx + Math.cos(angle) * rx * 0.5;
-    const sy = cy + Math.sin(angle) * ry * 0.5;
-    const ex = cx + Math.cos(angle) * rx * 1.6;
-    const ey = cy + Math.sin(angle) * ry * 1.6;
-    drawBolt(sx, sy, ex, ey, 2.5, 0.9);
-  }
+  // Particles traveling along the edge
+  if (edgePoints.length > 0) {
+    for (const p of particles) {
+      // Move along edge points
+      p.progress += p.speed * 0.003;
+      if (p.progress >= 1) p.progress -= 1;
 
-  // Floating particles / sparks
-  for (const p of particles) {
-    p.angle += p.drift + Math.sin(t + p.phase) * 0.01;
-    const wobble = Math.sin(t * p.speed + p.phase);
-    const d = p.dist + wobble * 0.15;
-    const px = cx + Math.cos(p.angle + t * p.speed * 0.3) * rx * d;
-    const py = cy + Math.sin(p.angle + t * p.speed * 0.3) * ry * d;
-    const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * 3 + p.phase));
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.shadowColor = '#ffd700';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = Math.random() > 0.3 ? '#ffe44d' : '#fff';
-    ctx.beginPath();
-    ctx.arc(px, py, p.size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+      const idx = Math.floor(p.progress * edgePoints.length) % edgePoints.length;
+      const ep = edgePoints[idx];
+
+      // Small wobble outward
+      const cx = imgX + imgW / 2;
+      const cy = imgY + imgH / 2;
+      const dx = ep.x - cx;
+      const dy = ep.y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const wobble = Math.sin(t * 3 + p.phase) * 8;
+      const px = ep.x + (dx / dist) * wobble;
+      const py = ep.y + (dy / dist) * wobble;
+
+      const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * 3 + p.phase));
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = Math.random() > 0.3 ? '#ffe44d' : '#fff';
+      ctx.beginPath();
+      ctx.arc(px, py, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   requestAnimationFrame(loop);
@@ -234,7 +320,7 @@ function startRecording() {
   });
 
   const fps = 20;
-  const duration = 4; // seconds
+  const duration = 4;
   const totalFrames = fps * duration;
   let frame = 0;
 
