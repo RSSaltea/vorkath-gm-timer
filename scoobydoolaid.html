@@ -286,8 +286,8 @@ function loop(ts) {
     const cy = imgY + imgH / 2;
 
     // Small outward bolts from edges (keep short)
-    for (let i = 0; i < 10; i++) {
-      if (Math.random() > 0.4) continue;
+    for (let i = 0; i < 3; i++) {
+      if (Math.random() > 0.15) continue;
       const ep = edgePoints[Math.floor(Math.random() * edgePoints.length)];
       const dx = ep.x - cx;
       const dy = ep.y - cy;
@@ -301,8 +301,8 @@ function loop(ts) {
     }
 
     // Surface bolts - arc across the body between edge points (the main effect)
-    for (let i = 0; i < 20; i++) {
-      if (Math.random() > 0.5) continue;
+    for (let i = 0; i < 5; i++) {
+      if (Math.random() > 0.15) continue;
       const ep1 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
       const ep2 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
       const d = Math.sqrt((ep1.x - ep2.x) ** 2 + (ep1.y - ep2.y) ** 2);
@@ -312,8 +312,8 @@ function loop(ts) {
     }
 
     // Bright surface flash bolts (longer arcs across the body)
-    for (let i = 0; i < 4; i++) {
-      if (Math.random() > 0.35) continue;
+    for (let i = 0; i < 2; i++) {
+      if (Math.random() > 0.08) continue;
       const ep1 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
       const ep2 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
       const d = Math.sqrt((ep1.x - ep2.x) ** 2 + (ep1.y - ep2.y) ** 2);
