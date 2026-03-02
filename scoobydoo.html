@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ScoopyDoo Glow</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  #controls {
+    position: fixed;
+    top: 16px;
+    z-index: 10;
+    display: flex;
+    gap: 10px;
+  }
+  #controls button {
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: bold;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #d4a017;
+    color: #000;
+  }
+  #controls button:hover { background: #f0c040; }
+  #status {
+    color: #f0c040;
+    font-family: monospace;
+    font-size: 13px;
+    position: fixed;
+    top: 56px;
+    z-index: 10;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <button onclick="startRecording()">Record GIF (4s)</button>
+  <button onclick="saveFrame()">Save PNG Frame</button>
+</div>
+<div id="status"></div>
+
+<canvas id="c"></canvas>
+
+<!-- GIF encoder library -->
+<script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+
+const img = new Image();
+img.src = 'src/img/scoobydoo.png';
+
+// Config
+const PADDING = 80;
+const BOLT_COUNT = 14;
+const PARTICLE_COUNT = 60;
+
+let W, H, imgW, imgH, imgX, imgY;
+let t = 0;
+
+img.onload = () => {
+  // Size canvas to image + padding for glow
+  imgW = img.naturalWidth;
+  imgH = img.naturalHeight;
+  W = canvas.width = imgW + PADDING * 2;
+  H = canvas.height = imgH + PADDING * 2;
+  imgX = PADDING;
+  imgY = PADDING;
+  requestAnimationFrame(loop);
+};
+
+// Lightning bolt generation
+function bolt(x1, y1, x2, y2, depth) {
+  if (depth === 0) {
+    ctx.lineTo(x2, y2);
+    return;
+  }
+  const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * (depth * 14);
+  const my = (y1 + y2) / 2 + (Math.random() - 0.5) * (depth * 14);
+  bolt(x1, y1, mx, my, depth - 1);
+  bolt(mx, my, x2, y2, depth - 1);
+}
+
+function drawBolt(x1, y1, x2, y2, width, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = '#fff8b0';
+  ctx.shadowColor = '#ffd700';
+  ctx.shadowBlur = 18;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  bolt(x1, y1, x2, y2, 4);
+  ctx.stroke();
+  // brighter core
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = width * 0.4;
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  bolt(x1, y1, x2, y2, 4);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Particles
+const particles = [];
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  particles.push({
+    angle: Math.random() * Math.PI * 2,
+    dist: 0.4 + Math.random() * 0.6,
+    speed: 0.3 + Math.random() * 1.2,
+    size: 1 + Math.random() * 2.5,
+    phase: Math.random() * Math.PI * 2,
+    drift: (Math.random() - 0.5) * 0.02
+  });
+}
+
+function loop(ts) {
+  t = ts * 0.001;
+  ctx.clearRect(0, 0, W, H);
+
+  const cx = imgX + imgW / 2;
+  const cy = imgY + imgH / 2;
+  const rx = imgW / 2 + 20;
+  const ry = imgH / 2 + 20;
+
+  // Outer aura glow layers
+  for (let i = 4; i >= 0; i--) {
+    const spread = 20 + i * 12;
+    const alpha = 0.06 + (4 - i) * 0.025;
+    ctx.save();
+    ctx.globalAlpha = alpha + Math.sin(t * 3 + i) * 0.02;
+    ctx.shadowColor = '#ffd700';
+    ctx.shadowBlur = spread;
+    ctx.fillStyle = '#ffd700';
+    // Draw ellipse around the character
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx + i * 8, ry + i * 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Pulsing inner glow
+  const pulse = 0.5 + 0.5 * Math.sin(t * 4);
+  ctx.save();
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry) + 30);
+  grad.addColorStop(0, `rgba(255, 215, 0, ${0.15 + pulse * 0.1})`);
+  grad.addColorStop(0.5, `rgba(255, 180, 0, ${0.08 + pulse * 0.05})`);
+  grad.addColorStop(1, 'rgba(255, 150, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+
+  // Draw the character image
+  ctx.save();
+  ctx.shadowColor = '#ffd700';
+  ctx.shadowBlur = 15 + pulse * 10;
+  ctx.drawImage(img, imgX, imgY, imgW, imgH);
+  ctx.restore();
+
+  // Lightning bolts radiating from character edges
+  for (let i = 0; i < BOLT_COUNT; i++) {
+    // Only draw some bolts each frame for flickering effect
+    if (Math.random() > 0.35) continue;
+    const angle = (i / BOLT_COUNT) * Math.PI * 2 + Math.sin(t * 2 + i) * 0.3;
+    const startR = 0.7;
+    const endR = 1.0 + Math.random() * 0.5;
+    const sx = cx + Math.cos(angle) * rx * startR;
+    const sy = cy + Math.sin(angle) * ry * startR;
+    const ex = cx + Math.cos(angle) * rx * endR;
+    const ey = cy + Math.sin(angle) * ry * endR;
+    const boltAlpha = 0.4 + Math.random() * 0.6;
+    drawBolt(sx, sy, ex, ey, 1 + Math.random() * 1.5, boltAlpha);
+  }
+
+  // Bright flash bolts (occasional large ones)
+  if (Math.random() > 0.85) {
+    const angle = Math.random() * Math.PI * 2;
+    const sx = cx + Math.cos(angle) * rx * 0.5;
+    const sy = cy + Math.sin(angle) * ry * 0.5;
+    const ex = cx + Math.cos(angle) * rx * 1.6;
+    const ey = cy + Math.sin(angle) * ry * 1.6;
+    drawBolt(sx, sy, ex, ey, 2.5, 0.9);
+  }
+
+  // Floating particles / sparks
+  for (const p of particles) {
+    p.angle += p.drift + Math.sin(t + p.phase) * 0.01;
+    const wobble = Math.sin(t * p.speed + p.phase);
+    const d = p.dist + wobble * 0.15;
+    const px = cx + Math.cos(p.angle + t * p.speed * 0.3) * rx * d;
+    const py = cy + Math.sin(p.angle + t * p.speed * 0.3) * ry * d;
+    const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * 3 + p.phase));
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = '#ffd700';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = Math.random() > 0.3 ? '#ffe44d' : '#fff';
+    ctx.beginPath();
+    ctx.arc(px, py, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// --- GIF Recording ---
+function startRecording() {
+  statusEl.textContent = 'Recording... 0%';
+  const gif = new GIF({
+    workers: 2,
+    quality: 8,
+    width: W,
+    height: H,
+    workerScript: 'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js',
+    transparent: null,
+    background: '#000000'
+  });
+
+  const fps = 20;
+  const duration = 4; // seconds
+  const totalFrames = fps * duration;
+  let frame = 0;
+
+  function capture() {
+    if (frame >= totalFrames) {
+      statusEl.textContent = 'Encoding GIF...';
+      gif.on('finished', blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'scoobydoo_glow.gif';
+        a.click();
+        URL.revokeObjectURL(url);
+        statusEl.textContent = 'GIF saved!';
+        setTimeout(() => statusEl.textContent = '', 3000);
+      });
+      gif.render();
+      return;
+    }
+    gif.addFrame(ctx, { copy: true, delay: 1000 / fps });
+    frame++;
+    statusEl.textContent = `Recording... ${Math.round(frame / totalFrames * 100)}%`;
+    requestAnimationFrame(capture);
+  }
+  capture();
+}
+
+function saveFrame() {
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'scoobydoo_glow.png';
+    a.click();
+    URL.revokeObjectURL(url);
+    statusEl.textContent = 'PNG saved!';
+    setTimeout(() => statusEl.textContent = '', 2000);
+  });
+}
+</script>
+</body>
+</html>
