@@ -64,7 +64,7 @@ const statusEl = document.getElementById('status');
 const img = new Image();
 img.src = 'src/img/scoobydoo.png';
 
-const PADDING = 80;
+const PADDING = 250;
 const BOLT_COUNT = 18;
 const PARTICLE_COUNT = 70;
 
@@ -131,7 +131,7 @@ function extractEdgePoints() {
 
 function buildGlowLayers() {
   // Create multiple blurred silhouette layers in gold for the tight glow
-  const blurLevels = [4, 10, 20, 35, 55];
+  const blurLevels = [10, 30, 60, 110, 170, 250];
   glowCanvases = blurLevels.map(blur => {
     const c = document.createElement('canvas');
     c.width = W;
@@ -217,7 +217,7 @@ function loop(ts) {
   // Draw silhouette glow layers (tight to the shape)
   for (let i = glowCanvases.length - 1; i >= 0; i--) {
     const layer = glowCanvases[i];
-    const alpha = (0.12 + (glowCanvases.length - i) * 0.06) + Math.sin(t * 3 + i) * 0.03;
+    const alpha = (0.18 + (glowCanvases.length - i) * 0.09) + Math.sin(t * 3 + i) * 0.04;
     ctx.save();
     ctx.globalAlpha = Math.min(alpha, 0.7);
     ctx.drawImage(layer.canvas, 0, 0);
@@ -325,18 +325,29 @@ function startRecording() {
     return;
   }
   statusEl.textContent = 'Recording... 0%';
+
+  // Scale down for GIF to keep file size under 7MB
+  const maxGifWidth = 400;
+  const scale = Math.min(1, maxGifWidth / W);
+  const gifW = Math.round(W * scale);
+  const gifH = Math.round(H * scale);
+  const gifCanvas = document.createElement('canvas');
+  gifCanvas.width = gifW;
+  gifCanvas.height = gifH;
+  const gifCtx = gifCanvas.getContext('2d');
+
   const gif = new GIF({
     workers: 2,
-    quality: 8,
-    width: W,
-    height: H,
+    quality: 10,
+    width: gifW,
+    height: gifH,
     workerScript: workerBlobUrl,
     transparent: null,
     background: '#000000'
   });
 
-  const fps = 20;
-  const duration = 4;
+  const fps = 15;
+  const duration = 3;
   const totalFrames = fps * duration;
   let frame = 0;
 
@@ -344,14 +355,15 @@ function startRecording() {
     if (frame >= totalFrames) {
       statusEl.textContent = 'Encoding GIF...';
       gif.on('finished', blob => {
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = 'scoobydoo_glow.gif';
         a.click();
         URL.revokeObjectURL(url);
-        statusEl.textContent = 'GIF saved!';
-        setTimeout(() => statusEl.textContent = '', 3000);
+        statusEl.textContent = `GIF saved! (${sizeMB} MB)`;
+        setTimeout(() => statusEl.textContent = '', 4000);
       });
       gif.on('progress', p => {
         statusEl.textContent = `Encoding GIF... ${Math.round(p * 100)}%`;
@@ -359,7 +371,10 @@ function startRecording() {
       gif.render();
       return;
     }
-    gif.addFrame(ctx, { copy: true, delay: 1000 / fps });
+    // Draw scaled frame for GIF
+    gifCtx.clearRect(0, 0, gifW, gifH);
+    gifCtx.drawImage(canvas, 0, 0, gifW, gifH);
+    gif.addFrame(gifCtx, { copy: true, delay: 1000 / fps });
     frame++;
     statusEl.textContent = `Recording... ${Math.round(frame / totalFrames * 100)}%`;
     requestAnimationFrame(capture);
