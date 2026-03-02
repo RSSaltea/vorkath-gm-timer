@@ -65,7 +65,7 @@ const img = new Image();
 img.src = 'src/img/scoobydoo.png';
 
 const PADDING = 120;
-const BOLT_COUNT = 18;
+const BOLT_COUNT = 30;
 const PARTICLE_COUNT = 70;
 
 let W, H, imgW, imgH, imgX, imgY;
@@ -173,17 +173,27 @@ function bolt(x1, y1, x2, y2, depth) {
 function drawBolt(x1, y1, x2, y2, width, alpha) {
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.strokeStyle = '#fff8b0';
+  // Outer glow
+  ctx.strokeStyle = '#ffd700';
   ctx.shadowColor = '#ffd700';
-  ctx.shadowBlur = 18;
+  ctx.shadowBlur = 25;
+  ctx.lineWidth = width + 2;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  bolt(x1, y1, x2, y2, 4);
+  ctx.stroke();
+  // Bright middle
+  ctx.strokeStyle = '#fff8b0';
+  ctx.shadowBlur = 12;
   ctx.lineWidth = width;
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   bolt(x1, y1, x2, y2, 4);
   ctx.stroke();
+  // White hot core
   ctx.strokeStyle = '#fff';
-  ctx.lineWidth = width * 0.4;
-  ctx.shadowBlur = 8;
+  ctx.lineWidth = width * 0.5;
+  ctx.shadowBlur = 6;
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   bolt(x1, y1, x2, y2, 4);
@@ -237,39 +247,46 @@ function loop(ts) {
   ctx.drawImage(img, imgX, imgY, imgW, imgH);
   ctx.restore();
 
-  // Lightning bolts shooting from edge points outward
+  // Lightning bolts
   if (edgePoints.length > 0) {
-    for (let i = 0; i < BOLT_COUNT; i++) {
-      if (Math.random() > 0.3) continue;
+    const cx = imgX + imgW / 2;
+    const cy = imgY + imgH / 2;
+
+    // Small outward bolts from edges (keep short)
+    for (let i = 0; i < 10; i++) {
+      if (Math.random() > 0.4) continue;
       const ep = edgePoints[Math.floor(Math.random() * edgePoints.length)];
-      const cx = imgX + imgW / 2;
-      const cy = imgY + imgH / 2;
-      // Direction: outward from center through edge point
       const dx = ep.x - cx;
       const dy = ep.y - cy;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       const nx = dx / dist;
       const ny = dy / dist;
-      const boltLen = 25 + Math.random() * 50;
+      const boltLen = 15 + Math.random() * 30;
       const ex = ep.x + nx * boltLen;
       const ey = ep.y + ny * boltLen;
-      const boltAlpha = 0.4 + Math.random() * 0.5;
-      drawBolt(ep.x, ep.y, ex, ey, 1 + Math.random() * 1.5, boltAlpha);
+      drawBolt(ep.x, ep.y, ex, ey, 1.5 + Math.random() * 1.5, 0.6 + Math.random() * 0.4);
     }
 
-    // Occasional big flash bolt
-    if (Math.random() > 0.82) {
-      const ep = edgePoints[Math.floor(Math.random() * edgePoints.length)];
-      const cx = imgX + imgW / 2;
-      const cy = imgY + imgH / 2;
-      const dx = ep.x - cx;
-      const dy = ep.y - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const nx = dx / dist;
-      const ny = dy / dist;
-      const ex = ep.x + nx * (60 + Math.random() * 40);
-      const ey = ep.y + ny * (60 + Math.random() * 40);
-      drawBolt(ep.x, ep.y, ex, ey, 2.5, 0.85);
+    // Surface bolts - arc across the body between edge points (the main effect)
+    for (let i = 0; i < 20; i++) {
+      if (Math.random() > 0.5) continue;
+      const ep1 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const ep2 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const d = Math.sqrt((ep1.x - ep2.x) ** 2 + (ep1.y - ep2.y) ** 2);
+      if (d > 30 && d < 250) {
+        drawBolt(ep1.x, ep1.y, ep2.x, ep2.y, 2 + Math.random() * 2, 0.6 + Math.random() * 0.4);
+      }
+    }
+
+    // Bright surface flash bolts (longer arcs across the body)
+    for (let i = 0; i < 4; i++) {
+      if (Math.random() > 0.35) continue;
+      const ep1 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const ep2 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const d = Math.sqrt((ep1.x - ep2.x) ** 2 + (ep1.y - ep2.y) ** 2);
+      if (d > 100 && d < 500) {
+        drawBolt(ep1.x, ep1.y, ep2.x, ep2.y, 3 + Math.random() * 2, 0.8);
+      }
     }
   }
 
