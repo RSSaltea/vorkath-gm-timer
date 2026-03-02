@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ScoopyDooLaid Glow</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  #controls {
+    position: fixed;
+    top: 16px;
+    z-index: 10;
+    display: flex;
+    gap: 10px;
+  }
+  #controls button {
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: bold;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #d4a017;
+    color: #000;
+  }
+  #controls button:hover { background: #f0c040; }
+  #status {
+    color: #f0c040;
+    font-family: monospace;
+    font-size: 13px;
+    position: fixed;
+    top: 56px;
+    z-index: 10;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <button onclick="startRecording()">Record GIF (4s)</button>
+  <button onclick="saveFrame()">Save PNG Frame</button>
+</div>
+<div id="status"></div>
+
+<canvas id="c"></canvas>
+
+<!-- GIF encoder library -->
+<script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+
+const img = new Image();
+img.src = 'src/img/scoobydoolaid.png';
+
+const PADDING = 30;
+const BOLT_COUNT = 30;
+const PARTICLE_COUNT = 70;
+
+let W, H, imgW, imgH, imgX, imgY;
+let t = 0;
+
+// Edge points extracted from the image silhouette
+let edgePoints = [];
+// Offscreen canvases for silhouette glow
+let silhouetteCanvas, silhouetteCtx;
+let glowCanvases = []; // pre-blurred glow layers
+
+img.onload = () => {
+  // Find the tight bounding box of non-transparent pixels
+  const tmpC = document.createElement('canvas');
+  tmpC.width = img.naturalWidth;
+  tmpC.height = img.naturalHeight;
+  const tmpCtx = tmpC.getContext('2d');
+  tmpCtx.drawImage(img, 0, 0);
+  const tmpData = tmpCtx.getImageData(0, 0, tmpC.width, tmpC.height).data;
+  let minX = tmpC.width, minY = tmpC.height, maxX = 0, maxY = 0;
+  for (let y = 0; y < tmpC.height; y++) {
+    for (let x = 0; x < tmpC.width; x++) {
+      if (tmpData[(y * tmpC.width + x) * 4 + 3] > 30) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  // Cropped dimensions
+  const cropX = minX;
+  const cropY = minY;
+  const cropW = maxX - minX + 1;
+  const cropH = maxY - minY + 1;
+
+  imgW = cropW;
+  imgH = cropH;
+  W = canvas.width = imgW + PADDING * 2;
+  H = canvas.height = imgH + PADDING * 2;
+  imgX = PADDING;
+  imgY = PADDING;
+
+  // Store crop info for drawing
+  img._cropX = cropX;
+  img._cropY = cropY;
+  img._cropW = cropW;
+  img._cropH = cropH;
+
+  // Extract silhouette and edge points
+  buildSilhouette();
+  extractEdgePoints();
+  buildGlowLayers();
+
+  requestAnimationFrame(loop);
+};
+
+function drawImg(targetCtx, dx, dy, dw, dh) {
+  targetCtx.drawImage(img, img._cropX, img._cropY, img._cropW, img._cropH, dx, dy, dw, dh);
+}
+
+function buildSilhouette() {
+  silhouetteCanvas = document.createElement('canvas');
+  silhouetteCanvas.width = W;
+  silhouetteCanvas.height = H;
+  silhouetteCtx = silhouetteCanvas.getContext('2d');
+  drawImg(silhouetteCtx, imgX, imgY, imgW, imgH);
+}
+
+function extractEdgePoints() {
+  const data = silhouetteCtx.getImageData(0, 0, W, H).data;
+  const step = 3; // sample every 3 pixels for performance
+  edgePoints = [];
+
+  for (let y = 0; y < H; y += step) {
+    for (let x = 0; x < W; x += step) {
+      const idx = (y * W + x) * 4;
+      const a = data[idx + 3];
+      if (a < 30) continue; // transparent
+
+      // Check if this is an edge pixel (neighbor is transparent)
+      let isEdge = false;
+      const offsets = [[-step,0],[step,0],[0,-step],[0,step]];
+      for (const [dx, dy] of offsets) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) { isEdge = true; break; }
+        const ni = (ny * W + nx) * 4;
+        if (data[ni + 3] < 30) { isEdge = true; break; }
+      }
+      if (isEdge) {
+        edgePoints.push({ x, y });
+      }
+    }
+  }
+}
+
+function buildGlowLayers() {
+  // Create multiple blurred silhouette layers in gold for the tight glow
+  const blurLevels = [10, 30, 60, 110, 170, 250];
+  glowCanvases = blurLevels.map(blur => {
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const gctx = c.getContext('2d');
+
+    // Draw the image as a gold silhouette
+    drawImg(gctx, imgX, imgY, imgW, imgH);
+    // Recolor to gold using composite
+    gctx.globalCompositeOperation = 'source-in';
+    gctx.fillStyle = '#ffd700';
+    gctx.fillRect(0, 0, W, H);
+    gctx.globalCompositeOperation = 'source-over';
+
+    // Now blur it
+    const c2 = document.createElement('canvas');
+    c2.width = W;
+    c2.height = H;
+    const g2 = c2.getContext('2d');
+    g2.filter = `blur(${blur}px)`;
+    g2.drawImage(c, 0, 0);
+    g2.filter = 'none';
+    return { canvas: c2, blur };
+  });
+}
+
+// Lightning bolt generation
+function bolt(x1, y1, x2, y2, depth) {
+  if (depth === 0) {
+    ctx.lineTo(x2, y2);
+    return;
+  }
+  const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * (depth * 12);
+  const my = (y1 + y2) / 2 + (Math.random() - 0.5) * (depth * 12);
+  bolt(x1, y1, mx, my, depth - 1);
+  bolt(mx, my, x2, y2, depth - 1);
+}
+
+function drawBolt(x1, y1, x2, y2, width, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // Outer glow
+  ctx.strokeStyle = '#ffd700';
+  ctx.shadowColor = '#ffd700';
+  ctx.shadowBlur = 25;
+  ctx.lineWidth = width + 2;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  bolt(x1, y1, x2, y2, 4);
+  ctx.stroke();
+  // Bright middle
+  ctx.strokeStyle = '#fff8b0';
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  bolt(x1, y1, x2, y2, 4);
+  ctx.stroke();
+  // White hot core
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = width * 0.5;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  bolt(x1, y1, x2, y2, 4);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Particles bound to edge points
+const particles = [];
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  particles.push({
+    edgeIdx: 0, // will be assigned to a random edge point
+    offsetX: 0,
+    offsetY: 0,
+    speed: 0.5 + Math.random() * 2,
+    size: 1 + Math.random() * 2.5,
+    phase: Math.random() * Math.PI * 2,
+    progress: Math.random() // how far along the edge
+  });
+}
+
+function loop(ts) {
+  t = ts * 0.001;
+  ctx.clearRect(0, 0, W, H);
+  // Solid black background so alpha composites correctly for GIF capture
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  const pulse = 0.5 + 0.5 * Math.sin(t * 4);
+
+  // Draw silhouette glow layers (tight to the shape)
+  for (let i = glowCanvases.length - 1; i >= 0; i--) {
+    const layer = glowCanvases[i];
+    const alpha = (0.18 + (glowCanvases.length - i) * 0.09) + Math.sin(t * 3 + i) * 0.04;
+    ctx.save();
+    ctx.globalAlpha = Math.min(alpha, 0.7);
+    ctx.drawImage(layer.canvas, 0, 0);
+    ctx.restore();
+  }
+
+  // Extra pulsing tight glow
+  ctx.save();
+  ctx.globalAlpha = 0.15 + pulse * 0.12;
+  ctx.drawImage(glowCanvases[2].canvas, 0, 0);
+  ctx.restore();
+
+  // Draw the character image
+  ctx.save();
+  ctx.shadowColor = '#ffd700';
+  ctx.shadowBlur = 8 + pulse * 8;
+  drawImg(ctx, imgX, imgY, imgW, imgH);
+  ctx.restore();
+
+  // Lightning bolts
+  if (edgePoints.length > 0) {
+    const cx = imgX + imgW / 2;
+    const cy = imgY + imgH / 2;
+
+    // Small outward bolts from edges (keep short)
+    for (let i = 0; i < 10; i++) {
+      if (Math.random() > 0.4) continue;
+      const ep = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const dx = ep.x - cx;
+      const dy = ep.y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const nx = dx / dist;
+      const ny = dy / dist;
+      const boltLen = 15 + Math.random() * 30;
+      const ex = ep.x + nx * boltLen;
+      const ey = ep.y + ny * boltLen;
+      drawBolt(ep.x, ep.y, ex, ey, 1.5 + Math.random() * 1.5, 0.6 + Math.random() * 0.4);
+    }
+
+    // Surface bolts - arc across the body between edge points (the main effect)
+    for (let i = 0; i < 20; i++) {
+      if (Math.random() > 0.5) continue;
+      const ep1 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const ep2 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const d = Math.sqrt((ep1.x - ep2.x) ** 2 + (ep1.y - ep2.y) ** 2);
+      if (d > 30 && d < 250) {
+        drawBolt(ep1.x, ep1.y, ep2.x, ep2.y, 2 + Math.random() * 2, 0.6 + Math.random() * 0.4);
+      }
+    }
+
+    // Bright surface flash bolts (longer arcs across the body)
+    for (let i = 0; i < 4; i++) {
+      if (Math.random() > 0.35) continue;
+      const ep1 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const ep2 = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+      const d = Math.sqrt((ep1.x - ep2.x) ** 2 + (ep1.y - ep2.y) ** 2);
+      if (d > 100 && d < 500) {
+        drawBolt(ep1.x, ep1.y, ep2.x, ep2.y, 3 + Math.random() * 2, 0.8);
+      }
+    }
+  }
+
+  // Particles traveling along the edge
+  if (edgePoints.length > 0) {
+    for (const p of particles) {
+      // Move along edge points
+      p.progress += p.speed * 0.003;
+      if (p.progress >= 1) p.progress -= 1;
+
+      const idx = Math.floor(p.progress * edgePoints.length) % edgePoints.length;
+      const ep = edgePoints[idx];
+
+      // Small wobble outward
+      const cx = imgX + imgW / 2;
+      const cy = imgY + imgH / 2;
+      const dx = ep.x - cx;
+      const dy = ep.y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const wobble = Math.sin(t * 3 + p.phase) * 8;
+      const px = ep.x + (dx / dist) * wobble;
+      const py = ep.y + (dy / dist) * wobble;
+
+      const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * 3 + p.phase));
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = Math.random() > 0.3 ? '#ffe44d' : '#fff';
+      ctx.beginPath();
+      ctx.arc(px, py, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// --- GIF Recording ---
+let workerBlobUrl = null;
+
+// Pre-fetch the worker script as a blob to avoid cross-origin worker issues
+fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js')
+  .then(r => r.blob())
+  .then(blob => { workerBlobUrl = URL.createObjectURL(blob); })
+  .catch(() => console.warn('Could not pre-fetch gif worker'));
+
+function startRecording() {
+  if (!workerBlobUrl) {
+    statusEl.textContent = 'Worker not loaded yet, try again in a sec...';
+    setTimeout(() => statusEl.textContent = '', 2000);
+    return;
+  }
+  statusEl.textContent = 'Recording... 0%';
+
+  // Scale down for GIF to keep file size under 7MB
+  const maxGifWidth = 400;
+  const scale = Math.min(1, maxGifWidth / W);
+  const gifW = Math.round(W * scale);
+  const gifH = Math.round(H * scale);
+  const gifCanvas = document.createElement('canvas');
+  gifCanvas.width = gifW;
+  gifCanvas.height = gifH;
+  const gifCtx = gifCanvas.getContext('2d');
+
+  const gif = new GIF({
+    workers: 2,
+    quality: 10,
+    width: gifW,
+    height: gifH,
+    workerScript: workerBlobUrl,
+    transparent: null,
+    background: '#000000'
+  });
+
+  const fps = 15;
+  const duration = 3;
+  const totalFrames = fps * duration;
+  let frame = 0;
+
+  function capture() {
+    if (frame >= totalFrames) {
+      statusEl.textContent = 'Encoding GIF...';
+      gif.on('finished', blob => {
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'scoobydoolaid_glow.gif';
+        a.click();
+        URL.revokeObjectURL(url);
+        statusEl.textContent = `GIF saved! (${sizeMB} MB)`;
+        setTimeout(() => statusEl.textContent = '', 4000);
+      });
+      gif.on('progress', p => {
+        statusEl.textContent = `Encoding GIF... ${Math.round(p * 100)}%`;
+      });
+      gif.render();
+      return;
+    }
+    // Draw scaled frame for GIF
+    gifCtx.clearRect(0, 0, gifW, gifH);
+    gifCtx.drawImage(canvas, 0, 0, gifW, gifH);
+    gif.addFrame(gifCtx, { copy: true, delay: 1000 / fps });
+    frame++;
+    statusEl.textContent = `Recording... ${Math.round(frame / totalFrames * 100)}%`;
+    requestAnimationFrame(capture);
+  }
+  capture();
+}
+
+function saveFrame() {
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'scoobydoolaid_glow.png';
+    a.click();
+    URL.revokeObjectURL(url);
+    statusEl.textContent = 'PNG saved!';
+    setTimeout(() => statusEl.textContent = '', 2000);
+  });
+}
+</script>
+</body>
+</html>
