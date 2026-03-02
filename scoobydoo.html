@@ -208,6 +208,9 @@ for (let i = 0; i < PARTICLE_COUNT; i++) {
 function loop(ts) {
   t = ts * 0.001;
   ctx.clearRect(0, 0, W, H);
+  // Solid black background so alpha composites correctly for GIF capture
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
 
   const pulse = 0.5 + 0.5 * Math.sin(t * 4);
 
