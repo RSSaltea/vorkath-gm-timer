@@ -1363,7 +1363,7 @@ function init() {
       currentWorld = val;
       var el = document.getElementById('vgt-world');
       if (el) el.textContent = val ? 'World: ' + val : '';
-      sb.from('app_state').update({ value: val }).eq('key', 'world')
+      sb.rpc('admin_set_world', { pass: adminPass, new_world: val })
         .then(function(res) {
           if (res.error) console.warn('[VGT] World update failed:', res.error);
         });
