@@ -14,7 +14,7 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 var HEARTBEAT_MS        = 15000;
 var ONLINE_THRESHOLD_MS = 20000;
-var INFO_CODE           = 'dragon fire';
+var INFO_CODE           = '';
 
 // ── State ─────────────────────────────────────────────────────────
 var queueData       = [];
@@ -66,6 +66,16 @@ async function fetchQueue() {
   } catch (err) {
     console.warn('[VGT] Failed to fetch queue:', err);
     return null;
+  }
+}
+
+async function fetchInfoCode() {
+  try {
+    var result = await sb.from('app_state').select('value').eq('key', 'info_code').single();
+    if (result.error) throw result.error;
+    INFO_CODE = (result.data.value || '').toLowerCase().trim();
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch info code:', err);
   }
 }
 
@@ -570,7 +580,7 @@ function isOnline(name) {
 async function refresh() {
   setDot('loading');
 
-  var fetches = [fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats()];
+  var fetches = [fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats(), fetchInfoCode()];
   if (calibrated) {
     fetches.push(fetchSessionState());
     fetches.push(fetchSkipped());
