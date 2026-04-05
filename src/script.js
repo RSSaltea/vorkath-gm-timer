@@ -1363,9 +1363,15 @@ function init() {
       currentWorld = val;
       var el = document.getElementById('vgt-world');
       if (el) el.textContent = val ? 'World: ' + val : '';
+      var worldInput = document.getElementById('ac-world-input');
       sb.rpc('admin_set_world', { pass: adminPass, new_world: val })
         .then(function(res) {
-          if (res.error) console.warn('[VGT] World update failed:', res.error);
+          if (res.error) {
+            console.warn('[VGT] World update failed:', res.error);
+            if (worldInput) { worldInput.style.borderColor = '#e74c3c'; setTimeout(function() { worldInput.style.borderColor = ''; }, 2000); }
+          } else {
+            if (worldInput) { worldInput.style.borderColor = '#2ecc71'; setTimeout(function() { worldInput.style.borderColor = ''; }, 2000); }
+          }
         });
     }, 500);
   });
