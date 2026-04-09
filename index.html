@@ -50,6 +50,17 @@
       <input class="vgt-ac-world-input" id="ac-world-input" type="text"
         placeholder="e.g. 36" autocomplete="off" spellcheck="false" />
     </div>
+
+    <div class="vgt-ac-section" id="ac-blacklist-section" style="display:none;">
+      <div class="vgt-ac-label">Blacklist</div>
+      <div class="vgt-ac-desc">Banned players cannot sign up</div>
+      <div style="display:flex;gap:4px;margin-top:6px;">
+        <input class="vgt-ac-world-input" id="ac-blacklist-input" type="text"
+          placeholder="RS name..." autocomplete="off" spellcheck="false" style="flex:1;" />
+        <button class="vgt-ac-btn toggle" id="ac-blacklist-add-btn">Ban</button>
+      </div>
+      <div id="ac-blacklist-list" style="margin-top:6px;max-height:160px;overflow-y:auto;"></div>
+    </div>
   </div>
 
   <!-- Completed side panel (admin, left) -->
@@ -206,6 +217,15 @@
         Join our Discord
       </button>
 
+    </div>
+
+    <!-- Banned overlay -->
+    <div class="vgt-admin-overlay" id="banned-overlay" style="display:none;">
+      <div class="vgt-admin-dialog" style="text-align:center;">
+        <div style="font-size:2em;margin-bottom:8px;">🚫</div>
+        <div class="vgt-label" style="color:#e74c3c;">You are banned</div>
+        <div style="color:#aaa;font-size:13px;margin-top:6px;">You have been blacklisted from joining the queue.</div>
+      </div>
     </div>
 
     <!-- Admin login overlay -->

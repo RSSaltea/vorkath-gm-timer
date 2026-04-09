@@ -27,6 +27,9 @@ var heartbeatData   = {};
 var currentWorld    = '';
 var calibrated      = false;
 var adminPass       = '';
+var superCalibrated = false;
+var superAdminPass  = '';
+var blacklist       = [];
 var lastPingCheck   = new Date().toISOString();
 var completedData   = [];
 var sessionActive   = false;
@@ -66,6 +69,19 @@ async function fetchQueue() {
   } catch (err) {
     console.warn('[VGT] Failed to fetch queue:', err);
     return null;
+  }
+}
+
+async function fetchBlacklist() {
+  try {
+    var result = await sb.from('blacklist').select('name');
+    if (result.error) throw result.error;
+    blacklist = (result.data || []).map(function(r) { return r.name.toLowerCase(); });
+    renderBlacklistPanel();
+    // Re-check if current player is banned
+    checkBanned();
+  } catch (err) {
+    console.warn('[VGT] Failed to fetch blacklist:', err);
   }
 }
 
@@ -580,7 +596,7 @@ function isOnline(name) {
 async function refresh() {
   setDot('loading');
 
-  var fetches = [fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats(), fetchInfoCode()];
+  var fetches = [fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats(), fetchInfoCode(), fetchBlacklist()];
   if (calibrated) {
     fetches.push(fetchSessionState());
     fetches.push(fetchSkipped());
@@ -612,6 +628,7 @@ function setupRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, onRealtimeChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, onRealtimeChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'skipped' }, onRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'blacklist' }, function() { fetchBlacklist(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'completed' }, function() {
       fetchCompleted();
       onRealtimeChange();
@@ -858,6 +875,41 @@ function toggleInfoSidePanel(show) {
   }
 }
 
+// ── Blacklist ─────────────────────────────────────────────────────
+
+function checkBanned() {
+  var name = getEffectiveName().toLowerCase();
+  var banned = name && blacklist.indexOf(name) !== -1;
+  var bannedOverlay = document.getElementById('banned-overlay');
+  var joinBtn = document.getElementById('join-queue-btn');
+  if (bannedOverlay) bannedOverlay.style.display = banned ? 'flex' : 'none';
+  if (joinBtn) joinBtn.style.display = banned ? 'none' : '';
+}
+
+function renderBlacklistPanel() {
+  var list = document.getElementById('ac-blacklist-list');
+  if (!list) return;
+  if (blacklist.length === 0) {
+    list.innerHTML = '<div style="color:#666;font-size:12px;padding:4px 0;">No banned players</div>';
+    return;
+  }
+  list.innerHTML = blacklist.map(function(name) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px;">' +
+      '<span style="color:#eee;">' + escapeHtml(name) + '</span>' +
+      '<button onclick="unbanPlayer(\'' + escapeHtml(name) + '\')" style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">Unban</button>' +
+      '</div>';
+  }).join('');
+}
+
+function unbanPlayer(name) {
+  if (!superCalibrated) return;
+  sb.rpc('super_admin_remove_blacklist', { pass: superAdminPass, player_name: name })
+    .then(function(res) {
+      if (res.error) console.warn('[VGT] Unban failed:', res.error);
+      else fetchBlacklist();
+    });
+}
+
 // ── Join Queue ────────────────────────────────────────────────────
 
 var lastSubmittedName = '';
@@ -866,6 +918,7 @@ var lastSubmitTime    = 0;
 async function joinQueue() {
   var name = getEffectiveName();
   if (!name) return;
+  if (blacklist.indexOf(name.toLowerCase()) !== -1) return;
 
   var infoInput = document.getElementById('info-phrase-input');
   var infoValue = infoInput ? infoInput.value.trim().toLowerCase() : '';
@@ -982,6 +1035,7 @@ function init() {
     try { localStorage.setItem('vgt_playerName', this.value.trim()); } catch (e) {}
     updateStatus(queueData);
     updateQueueList(queueData);
+    checkBanned();
     clearTimeout(nameDebounce);
     nameDebounce = setTimeout(refresh, 1000);
     clearTimeout(heartbeatDebounce);
@@ -1039,6 +1093,7 @@ function init() {
   function deactivateAdmin() {
     calibrated = false;
     adminPass = '';
+    deactivateSuperAdmin();
     try {
       localStorage.removeItem('vgt_adminPass');
       localStorage.removeItem('vgt_adminExpiry');
@@ -1053,6 +1108,37 @@ function init() {
     updateQueueList(queueData);
     var qtc = document.getElementById('queue-total-carries');
     if (qtc) qtc.style.display = 'none';
+  }
+
+  function activateSuperAdmin(pass) {
+    superCalibrated = true;
+    superAdminPass = pass;
+    var section = document.getElementById('ac-blacklist-section');
+    if (section) section.style.display = '';
+    fetchBlacklist();
+  }
+
+  function deactivateSuperAdmin() {
+    superCalibrated = false;
+    superAdminPass = '';
+    var section = document.getElementById('ac-blacklist-section');
+    if (section) section.style.display = 'none';
+  }
+
+  // ── Blacklist ban button ────────────────────────────────────────
+  var blacklistInput  = document.getElementById('ac-blacklist-input');
+  var blacklistAddBtn = document.getElementById('ac-blacklist-add-btn');
+  if (blacklistAddBtn) {
+    blacklistAddBtn.addEventListener('click', function() {
+      if (!superCalibrated) return;
+      var name = blacklistInput ? blacklistInput.value.trim() : '';
+      if (!name) return;
+      sb.rpc('super_admin_add_blacklist', { pass: superAdminPass, player_name: name })
+        .then(function(res) {
+          if (res.error) console.warn('[VGT] Ban failed:', res.error);
+          else { if (blacklistInput) blacklistInput.value = ''; fetchBlacklist(); }
+        });
+    });
   }
 
   // ── Auto-login from saved session ─────────────────────────────
@@ -1107,6 +1193,10 @@ function init() {
       if (result.data === true) {
         activateAdmin(entered);
         adminOverlay.style.display = 'none';
+        // Check if super admin key
+        sb.rpc('check_super_admin', { pass: entered }).then(function(r) {
+          if (r.data === true) activateSuperAdmin(entered);
+        });
       } else {
         adminError.textContent = 'Invalid key';
         adminError.style.display = 'block';
