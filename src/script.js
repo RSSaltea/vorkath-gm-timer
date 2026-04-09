@@ -1113,6 +1113,10 @@ function init() {
   function activateSuperAdmin(pass) {
     superCalibrated = true;
     superAdminPass = pass;
+    try {
+      localStorage.setItem('vgt_superPass', pass);
+      localStorage.setItem('vgt_superExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    } catch (e) {}
     var section = document.getElementById('ac-blacklist-section');
     if (section) section.style.display = '';
     // Open the controls panel if not already open (super admin only — no queue admin)
@@ -1127,6 +1131,10 @@ function init() {
   function deactivateSuperAdmin() {
     superCalibrated = false;
     superAdminPass = '';
+    try {
+      localStorage.removeItem('vgt_superPass');
+      localStorage.removeItem('vgt_superExpiry');
+    } catch (e) {}
     var section = document.getElementById('ac-blacklist-section');
     if (section) section.style.display = 'none';
     if (!calibrated) {
@@ -1160,6 +1168,9 @@ function init() {
       sb.rpc('check_admin', { pass: savedPass }).then(function(result) {
         if (result.data === true) {
           activateAdmin(savedPass);
+          sb.rpc('check_super_admin', { pass: savedPass }).then(function(r) {
+            if (r.data === true) activateSuperAdmin(savedPass);
+          });
         } else {
           localStorage.removeItem('vgt_adminPass');
           localStorage.removeItem('vgt_adminExpiry');
@@ -1168,6 +1179,25 @@ function init() {
     } else {
       localStorage.removeItem('vgt_adminPass');
       localStorage.removeItem('vgt_adminExpiry');
+    }
+  } catch (e) {}
+
+  try {
+    var savedSuperPass = localStorage.getItem('vgt_superPass');
+    var savedSuperExpiry = localStorage.getItem('vgt_superExpiry');
+    if (savedSuperPass && savedSuperExpiry && Date.now() < Number(savedSuperExpiry)) {
+      sb.rpc('check_super_admin', { pass: savedSuperPass }).then(function(result) {
+        if (result.data === true) {
+          if (!calibrated) activateAdmin(savedSuperPass);
+          activateSuperAdmin(savedSuperPass);
+        } else {
+          localStorage.removeItem('vgt_superPass');
+          localStorage.removeItem('vgt_superExpiry');
+        }
+      });
+    } else {
+      localStorage.removeItem('vgt_superPass');
+      localStorage.removeItem('vgt_superExpiry');
     }
   } catch (e) {}
 
