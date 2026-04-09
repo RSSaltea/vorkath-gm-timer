@@ -1115,6 +1115,12 @@ function init() {
     superAdminPass = pass;
     var section = document.getElementById('ac-blacklist-section');
     if (section) section.style.display = '';
+    // Open the controls panel if not already open (super admin only — no queue admin)
+    if (!calibrated) {
+      var ab = document.getElementById('admin-btn');
+      if (ab) { ab.textContent = 'Admin \u2713'; ab.classList.add('active'); }
+      toggleAdminControlsPanel(true);
+    }
     fetchBlacklist();
   }
 
@@ -1123,6 +1129,11 @@ function init() {
     superAdminPass = '';
     var section = document.getElementById('ac-blacklist-section');
     if (section) section.style.display = 'none';
+    if (!calibrated) {
+      var ab = document.getElementById('admin-btn');
+      if (ab) { ab.textContent = 'Admin'; ab.classList.remove('active'); }
+      toggleAdminControlsPanel(false);
+    }
   }
 
   // ── Blacklist ban button ────────────────────────────────────────
@@ -1193,15 +1204,22 @@ function init() {
       if (result.data === true) {
         activateAdmin(entered);
         adminOverlay.style.display = 'none';
-        // Check if super admin key
+        // Check if also super admin key
         sb.rpc('check_super_admin', { pass: entered }).then(function(r) {
           if (r.data === true) activateSuperAdmin(entered);
         });
       } else {
-        adminError.textContent = 'Invalid key';
-        adminError.style.display = 'block';
-        adminPassInput.value = '';
-        adminPassInput.focus();
+        // Check if it's a super admin key
+        var superResult = await sb.rpc('check_super_admin', { pass: entered });
+        if (superResult.data === true) {
+          activateSuperAdmin(entered);
+          adminOverlay.style.display = 'none';
+        } else {
+          adminError.textContent = 'Invalid key';
+          adminError.style.display = 'block';
+          adminPassInput.value = '';
+          adminPassInput.focus();
+        }
       }
     } catch (err) {
       adminError.textContent = 'Could not verify — retry';
