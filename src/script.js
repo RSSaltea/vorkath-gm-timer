@@ -1209,9 +1209,10 @@ function init() {
           if (r.data === true) activateSuperAdmin(entered);
         });
       } else {
-        // Check if it's a super admin key
+        // Check if it's a super admin key — grants full admin + blacklist
         var superResult = await sb.rpc('check_super_admin', { pass: entered });
         if (superResult.data === true) {
+          activateAdmin(entered);
           activateSuperAdmin(entered);
           adminOverlay.style.display = 'none';
         } else {
