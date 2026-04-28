@@ -988,6 +988,11 @@ function init() {
   });
 
   // ── Tab switching
+  function updateSwitchBtnTab(tabName) {
+    var btn = document.querySelector('.vgt-switch-btn');
+    if (btn) btn.href = 'index.html?tab=' + tabName;
+  }
+
   function switchToTab(tabName) {
     document.querySelectorAll('.vgt-tab').forEach(function(t) {
       t.classList.remove('active');
@@ -1000,6 +1005,7 @@ function init() {
     var tabPage = document.getElementById('tab-' + tabName);
     if (tabPage) tabPage.classList.add('active');
     try { localStorage.setItem('slk_activeTab', tabName); } catch (e) {}
+    updateSwitchBtnTab(tabName);
     if (calibrated && tabName === 'queue') {
       toggleAdminControlsPanel(true);
       toggleSkippedPanel(true);
@@ -1020,7 +1026,8 @@ function init() {
     });
   });
 
-  var savedTab = localStorage.getItem('slk_activeTab') || 'info';
+  var urlTab = new URLSearchParams(window.location.search).get('tab');
+  var savedTab = urlTab || localStorage.getItem('slk_activeTab') || 'info';
   switchToTab(savedTab);
 
   // ── Name input

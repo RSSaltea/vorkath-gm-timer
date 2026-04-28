@@ -992,6 +992,11 @@ function init() {
   });
 
   // ── Tab switching
+  function updateSwitchBtnTab(tabName) {
+    var btn = document.querySelector('.vgt-switch-btn');
+    if (btn) btn.href = 'indexsolak.html?tab=' + tabName;
+  }
+
   function switchToTab(tabName) {
     document.querySelectorAll('.vgt-tab').forEach(function(t) {
       t.classList.remove('active');
@@ -1004,6 +1009,7 @@ function init() {
     var tabPage = document.getElementById('tab-' + tabName);
     if (tabPage) tabPage.classList.add('active');
     try { localStorage.setItem('vgt_activeTab', tabName); } catch (e) {}
+    updateSwitchBtnTab(tabName);
     if (calibrated && tabName === 'queue') {
       toggleAdminControlsPanel(true);
       toggleSkippedPanel(true);
@@ -1025,7 +1031,8 @@ function init() {
   });
 
   // Restore last active tab (default to 'info')
-  var savedTab = localStorage.getItem('vgt_activeTab') || 'info';
+  var urlTab = new URLSearchParams(window.location.search).get('tab');
+  var savedTab = urlTab || localStorage.getItem('vgt_activeTab') || 'info';
   switchToTab(savedTab);
 
   // ── Name input
