@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Vorkath Grandmaster Timer</title>
+  <title>Solak Grandmaster Timer</title>
   <link rel="icon" href="./src/icon1.png" type="image/png" />
 
   <script src="https://www.unpkg.com/alt1/dist/base/index.js"></script>
@@ -18,6 +18,22 @@
   <link rel="stylesheet" href="./src/css/nis.css?v=1.0" />
   <link rel="stylesheet" href="./src/css/style.css?v=2.4" />
   <style>
+    :root {
+      --accent:     #27ae60;
+      --accent-dim: rgba(39, 174, 96, 0.15);
+    }
+    .vgt-join-btn,
+    .vgt-ac-btn.start,
+    .vgt-admin-btn.active,
+    .vgt-ac-btn.toggle.open-state { background: #27ae60 !important; }
+    .vgt-join-btn:hover { background: #1e8449 !important; }
+    .vgt-info-btn--discord { background: #5865f2 !important; }
+    .vgt-info-btn--discord:hover { background: #4752c4 !important; }
+    .vgt-info-btn--yt { background: #c0392b !important; }
+    .vgt-tab.active { border-bottom-color: #27ae60 !important; color: #27ae60 !important; }
+    .vgt-info-fc-name { color: #27ae60 !important; }
+    .search-input:focus { border-color: #27ae60 !important; }
+    /* Game switch bar */
     .vgt-game-switch {
       display: flex;
       gap: 4px;
@@ -35,14 +51,14 @@
       cursor: pointer;
       transition: border-color 0.15s, color 0.15s;
     }
-    .vgt-switch-btn:hover { border-color: #27ae60; color: #27ae60; }
+    .vgt-switch-btn:hover { border-color: #4a9eff; color: #4a9eff; }
     .vgt-switch-active {
       font-size: 11px;
       padding: 3px 8px;
       border-radius: 4px;
-      border: 1px solid #4a9eff;
-      background: rgba(74,158,255,0.12);
-      color: #4a9eff;
+      border: 1px solid #27ae60;
+      background: rgba(39,174,96,0.12);
+      color: #27ae60;
       font-weight: 600;
     }
   </style>
@@ -104,11 +120,11 @@
 
     <!-- Header -->
     <header class="vgt-header">
-      <div class="vgt-title">Vorkath GM Timer</div>
+      <div class="vgt-title">Solak GM Timer</div>
       <div class="vgt-header-right">
         <div class="vgt-game-switch">
-          <span class="vgt-switch-active">🐉 Vorkath</span>
-          <a class="vgt-switch-btn" href="indexsolak.html">⚔️ Solak</a>
+          <a class="vgt-switch-btn" href="index.html">🐉 Vorkath</a>
+          <span class="vgt-switch-active">⚔️ Solak</span>
         </div>
         <div class="vgt-world" id="vgt-world"></div>
         <div class="vgt-status-dot" id="vgt-dot" title="Connection status"></div>
@@ -122,7 +138,7 @@
     <!-- Alt1 install banner (hidden in-app, shown in browser) -->
     <div class="vgt-alt1-banner" id="alt1-banner">
       <span>Not running in Alt1</span>
-      <a class="vgt-alt1-install-btn" href="alt1://addapp/https://rssaltea.github.io/vorkath-gm-timer/appconfig.json">Add to Alt1</a>
+      <a class="vgt-alt1-install-btn" href="alt1://addapp/https://rssaltea.github.io/vorkath-gm-timer/solakappconfig.json">Add to Alt1</a>
     </div>
 
     <!-- Tabs -->
@@ -153,7 +169,7 @@
           class="vgt-name-input"
           id="info-phrase-input"
           type="text"
-          placeholder="Read the Info tab for Password (on the info tab here)..."
+          placeholder="Read the Info tab for Password..."
           autocomplete="off"
           spellcheck="false"
         />
@@ -197,7 +213,7 @@
         <div class="vgt-completed-body" id="completed-body" style="display:none;">
           <div class="vgt-completed-search-wrap">
             <input class="vgt-name-input" id="completed-search" type="text" placeholder="Search..." autocomplete="off" spellcheck="false" />
-            <a class="vgt-completed-fullview" href="completed.html" target="_blank" title="View full list">&#x2197;</a>
+            <a class="vgt-completed-fullview" href="completedsolak.html" target="_blank" title="View full list">&#x2197;</a>
             <div class="vgt-completed-suggestions" id="completed-suggestions"></div>
           </div>
           <div class="vgt-completed-list normalscroll" id="completed-list"></div>
@@ -212,7 +228,7 @@
       <div class="vgt-info-hero">
         <div class="vgt-info-stats">
           <span class="vgt-info-stat" id="info-total">Total: —</span>
-          <div class="vgt-info-fc-name">VorkathFC</div>
+          <div class="vgt-info-fc-name">SolakFC</div>
           <span class="vgt-info-stat" id="info-today">Today: —</span>
         </div>
         <label class="vgt-reminder-toggle">
@@ -227,16 +243,14 @@
       <div class="vgt-info-card">
         <div class="vgt-label">Tips</div>
         <ul class="vgt-info-list">
-          <li>Use Necromancy, do not use any other style please. The tier does not matter as long as you have Command Ghost.</li>
+          <li>Use Necromancy. The tier does not matter as long as you have Command Ghost.</li>
           <li>Command Ghost active at all times!</li>
-          <li>DO NOT PRESS THE BALLISTA BUTTON EVER!</li>
-          <li>Stay on the opposite side of Vorkath, away from the carry team. (south)</li>
-          <li>Devourer's Nexus (if you have it) and Ripper demon.</li>
-          <li>Use Smoke Cloud on Vorkath and Zemouregal.</li>
-          <li>Focus as much damage as possible for the Zemouregal skip (when Vorkath flies away). Password: Flightskip</li>
+          <li>Follow all instructions from the carry team throughout the fight.</li>
+          <li>Stay in your assigned position — do not interfere with the carry team's mechanics.</li>
+          <li>Focus damage on Solak whenever possible to help the carry team.</li>
+          <li>Use Smoke Cloud on Solak.</li>
           <li>We encourage you to keep the app (or website) open at all times.</li>
-          <li>Join the instance of any carry team members usually:</li>
-          <li class="vgt-info-circle"><span style="color:#ff9800">Glotzfrosch</span>, <span style="color:#ff9800">Saltea</span>, <span style="color:#ff9800">Czesc</span> or <span style="color:#ff9800">Nanci</span></li>
+          <li>Join the instance of any carry team members.</li>
         </ul>
       </div>
 
@@ -284,10 +298,6 @@
   <!-- Info side panel (right of app, visible on Info tab) -->
   <div class="vgt-info-side-panel" id="info-side-panel" style="display:none;">
     <div class="vgt-info-side-content">
-      <button class="vgt-info-btn vgt-info-btn--yt"
-              onclick="window.open('https://www.youtube.com/watch?v=Ds8aovPQ48I','_blank')">
-        ▶&nbsp; Example Kill
-      </button>
       <img class="vgt-info-side-img" src="./src/img/stand.png" alt="Stand position" />
     </div>
   </div>
@@ -316,8 +326,6 @@
 
   </div>
 
-  <script src="./src/script.js?v=3.25"></script>
-  <script src="./src/haunt-detector.js?v=2.2"></script>
-  <script src="./src/chat-reader.js?v=2.7"></script>
+  <script src="./src/solakscript.js?v=1.0"></script>
 </body>
 </html>

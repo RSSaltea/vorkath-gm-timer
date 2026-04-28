@@ -1,0 +1,1666 @@
+/* ================================================================
+   Solak GM Timer — solakscript.js
+   ================================================================
+   Manages the Solak GM carry queue using Supabase as the backend.
+   Alerts the player when they are in the top 3 or it is their turn.
+   ================================================================ */
+
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────
+var SUPABASE_URL = 'https://gogwmrnsofnqkjjxyskt.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvZ3dtcm5zb2ZucWtqanh5c2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNjE1OTcsImV4cCI6MjA4NzkzNzU5N30.Pw__3qey7A9dV2hjzei-9VNUY4Jc7unVFUGgU-3nTdk';
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+var HEARTBEAT_MS        = 15000;
+var ONLINE_THRESHOLD_MS = 20000;
+var INFO_CODE           = '';
+
+// ── State ─────────────────────────────────────────────────────────
+var queueData       = [];
+var wasFirst        = false;
+var wasInTopThree   = false;
+var submissionsOpen = true;
+var heartbeatTimer  = null;
+var realtimeDebounce = null;
+var heartbeatData   = {};
+var currentWorld    = '';
+var calibrated      = false;
+var adminPass       = '';
+var superCalibrated = false;
+var superAdminPass  = '';
+var blacklist       = [];
+var lastPingCheck   = new Date().toISOString();
+var completedData   = [];
+var sessionActive   = false;
+var sessionKillCount = 0;
+var skippedData     = [];
+var skippedPanelOpen = false;
+var completedSidePanelOpen = false;
+var adminControlsPanelOpen = false;
+var chatPanelOpen = false;
+var chatMessages = [];
+var dragSrcIndex = -1;
+var dragOverIndex = -1;
+var isDragging = false;
+
+// ── Helpers ───────────────────────────────────────────────────────
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function getEffectiveName() {
+  return document.getElementById('name-override').value.trim();
+}
+
+// ── Supabase data fetches ─────────────────────────────────────────
+
+async function fetchQueue() {
+  try {
+    var result = await sb.from('solak_queue').select('name').order('joined_at');
+    if (result.error) throw result.error;
+    queueData = result.data ? result.data.map(function(r) { return r.name; }) : [];
+    return queueData;
+  } catch (err) {
+    console.warn('[SLK] Failed to fetch queue:', err);
+    return null;
+  }
+}
+
+async function fetchBlacklist() {
+  try {
+    var result = await sb.from('blacklist').select('name');
+    if (result.error) throw result.error;
+    blacklist = (result.data || []).map(function(r) { return r.name.toLowerCase(); });
+    renderBlacklistPanel();
+    checkBanned();
+  } catch (err) {
+    console.warn('[SLK] Failed to fetch blacklist:', err);
+  }
+}
+
+async function fetchInfoCode() {
+  try {
+    var result = await sb.from('solak_app_state').select('value').eq('key', 'info_code').single();
+    if (result.error) throw result.error;
+    INFO_CODE = (result.data.value || '').toLowerCase().trim();
+  } catch (err) {
+    console.warn('[SLK] Failed to fetch info code:', err);
+  }
+}
+
+async function fetchSubmissionsOpen() {
+  try {
+    var result = await sb.from('solak_app_state').select('value').eq('key', 'submissions_open').single();
+    if (result.error) throw result.error;
+    submissionsOpen = result.data.value === 'true';
+  } catch (err) {
+    console.warn('[SLK] Failed to fetch submissions status:', err);
+    submissionsOpen = true;
+  }
+}
+
+async function fetchWorld() {
+  try {
+    var result = await sb.from('solak_app_state').select('value').eq('key', 'world').single();
+    if (result.error) throw result.error;
+    currentWorld = result.data.value || '';
+    var el = document.getElementById('vgt-world');
+    if (el) el.textContent = currentWorld ? 'World: ' + currentWorld : '';
+    var worldInput = document.getElementById('ac-world-input');
+    if (worldInput && document.activeElement !== worldInput) worldInput.value = currentWorld;
+  } catch (err) {
+    console.warn('[SLK] Failed to fetch world:', err);
+  }
+}
+
+async function fetchStats() {
+  try {
+    var result = await sb.from('solak_app_state').select('key, value').in('key', ['total_kills', 'session_kills']);
+    if (result.error) throw result.error;
+    var total = '—';
+    var today = '—';
+    for (var i = 0; i < result.data.length; i++) {
+      if (result.data[i].key === 'total_kills') total = result.data[i].value || '—';
+      if (result.data[i].key === 'session_kills') today = result.data[i].value || '—';
+    }
+    var elTotal = document.getElementById('info-total');
+    var elToday = document.getElementById('info-today');
+    if (elTotal) elTotal.textContent = 'Total: ' + total;
+    if (elToday) elToday.textContent = 'Today: ' + today;
+    var elQueueTotal = document.getElementById('queue-total-carries');
+    if (elQueueTotal) elQueueTotal.textContent = 'Total: ' + total;
+  } catch (err) {
+    console.warn('[SLK] Failed to fetch stats:', err);
+  }
+}
+
+async function fetchCompleted() {
+  try {
+    var result = await sb.from('solak_completed').select('name').order('id', { ascending: false });
+    if (result.error) throw result.error;
+    completedData = result.data ? result.data.map(function(r) { return r.name; }) : [];
+    updateCompletedPanel();
+    if (completedSidePanelOpen) {
+      var sideSearch = document.getElementById('completed-side-search');
+      renderCompletedSidePanel(sideSearch ? sideSearch.value.trim() : '');
+    }
+  } catch (err) {
+    console.warn('[SLK] Failed to fetch completed:', err);
+  }
+}
+
+async function fetchHeartbeats() {
+  try {
+    var result = await sb.from('heartbeats').select('name, last_seen');
+    if (result.error) throw result.error;
+    heartbeatData = {};
+    if (result.data) {
+      for (var i = 0; i < result.data.length; i++) {
+        heartbeatData[result.data[i].name.toLowerCase()] = result.data[i].last_seen;
+      }
+    }
+  } catch (err) {
+    console.warn('[SLK] Heartbeat fetch failed:', err);
+  }
+}
+
+async function sendHeartbeat() {
+  var name = getEffectiveName();
+  if (!name) return;
+  try {
+    await sb.rpc('upsert_heartbeat', { player_name: name });
+  } catch (err) {
+    console.warn('[SLK] Heartbeat send failed:', err);
+  }
+}
+
+async function fetchPings() {
+  var name = getEffectiveName();
+  if (!name) return;
+  try {
+    var result = await sb.from('pings')
+      .select('pinged_at')
+      .ilike('target_name', name)
+      .gt('pinged_at', lastPingCheck)
+      .limit(1);
+    if (result.error) throw result.error;
+    if (result.data && result.data.length > 0) {
+      playAlert('turn');
+      console.log('[SLK] Ping received!');
+    }
+    lastPingCheck = new Date().toISOString();
+  } catch (err) {
+    console.warn('[SLK] Ping fetch failed:', err);
+  }
+}
+
+async function fetchSessionState() {
+  try {
+    var result = await sb.from('solak_app_state').select('key, value').in('key', ['session_kills', 'session_active']);
+    if (result.error) throw result.error;
+    for (var i = 0; i < result.data.length; i++) {
+      if (result.data[i].key === 'session_kills') sessionKillCount = parseInt(result.data[i].value, 10) || 0;
+      if (result.data[i].key === 'session_active') sessionActive = result.data[i].value === 'true';
+    }
+    updateSessionDisplay();
+  } catch (err) {
+    console.warn('[SLK] Session state fetch failed:', err);
+  }
+}
+
+async function fetchSkipped() {
+  try {
+    var result = await sb.from('solak_skipped').select('name').order('skipped_at', { ascending: false }).limit(20);
+    if (result.error) throw result.error;
+    skippedData = result.data ? result.data.map(function(r) { return r.name; }) : [];
+    renderSkippedPanel();
+  } catch (err) {
+    console.warn('[SLK] Skipped fetch failed:', err);
+  }
+}
+
+// ── Status tab ────────────────────────────────────────────────────
+
+function updateStatus(queue) {
+  var alertCard  = document.getElementById('alert-card');
+  var alertIcon  = document.getElementById('alert-icon');
+  var alertTitle = document.getElementById('alert-title');
+  var alertSub   = document.getElementById('alert-sub');
+  var posEl      = document.getElementById('queue-position');
+  var joinBtn    = document.getElementById('join-queue-btn');
+
+  if (!queue) {
+    setCard(alertCard, 'error');
+    alertIcon.textContent  = '❌';
+    alertTitle.textContent = 'Failed to load queue';
+    alertSub.textContent   = 'Check your internet connection';
+    posEl.textContent      = '—';
+    joinBtn.style.display  = 'none';
+    return;
+  }
+
+  var name = getEffectiveName();
+
+  if (!name) {
+    setCard(alertCard, 'warning');
+    alertIcon.textContent  = '👤';
+    alertTitle.textContent = 'No name set';
+    alertSub.textContent   = 'Enter your RS name in the box above';
+    posEl.textContent      = '—';
+    joinBtn.style.display  = 'none';
+    return;
+  }
+
+  var nameLower = name.toLowerCase();
+  var idx       = -1;
+  for (var i = 0; i < queue.length; i++) {
+    if (queue[i].toLowerCase() === nameLower) { idx = i; break; }
+  }
+
+  var rank = idx + 1;
+
+  if (idx === -1) {
+    setCard(alertCard, 'neutral');
+    alertIcon.textContent  = '💤';
+    alertTitle.textContent = 'Not in queue';
+    alertSub.textContent   = 'You are not currently listed';
+    posEl.textContent      = '—';
+    if (!submissionsOpen) {
+      joinBtn.style.display = 'none';
+    } else {
+      joinBtn.style.display = 'block';
+      var infoInput = document.getElementById('info-phrase-input');
+      var infoValue = infoInput ? infoInput.value.trim().toLowerCase() : '';
+      if (infoValue !== INFO_CODE) {
+        joinBtn.disabled    = true;
+        joinBtn.textContent = 'Incorrect Info Phrase';
+        joinBtn.classList.add('closed');
+      } else {
+        joinBtn.disabled    = false;
+        joinBtn.textContent = '+ Join Queue';
+        joinBtn.classList.remove('closed');
+      }
+    }
+    wasInTopThree = false;
+    wasFirst      = false;
+    return;
+  }
+
+  joinBtn.style.display = 'none';
+  posEl.textContent = '#' + rank;
+
+  if (idx === 0) {
+    setCard(alertCard, 'turn');
+    alertIcon.textContent  = '⚔️';
+    alertTitle.textContent = "It's your turn!";
+    alertSub.innerHTML     = (currentWorld
+      ? 'Head to Solak on World: ' + currentWorld + ' now!'
+      : 'Head to Solak now!')
+      + '<br>Please be at the entrance ready to fight Solak';
+    if (!wasFirst) playAlert('turn');
+    wasFirst      = true;
+    wasInTopThree = true;
+    return;
+  }
+
+  if (idx <= 2) {
+    setCard(alertCard, 'soon');
+    alertIcon.textContent  = '⚠️';
+    alertTitle.textContent = 'Get ready!';
+    alertSub.innerHTML     = (currentWorld
+      ? 'You are #' + rank + ' — head to World: ' + currentWorld + ' now'
+      : 'You are #' + rank + ' — up soon')
+      + '<br>Please be at the entrance ready to fight Solak';
+    if (!wasInTopThree) playAlert('soon');
+    wasInTopThree = true;
+    wasFirst      = false;
+    return;
+  }
+
+  setCard(alertCard, 'waiting');
+  alertIcon.textContent  = '⏳';
+  alertTitle.textContent = 'In queue';
+  alertSub.textContent   = 'Position #' + rank + ' — wait for your turn';
+  wasInTopThree = false;
+  wasFirst      = false;
+}
+
+function setCard(el, state) {
+  el.className = 'vgt-alert-card ' + state;
+}
+
+// ── Queue tab ─────────────────────────────────────────────────────
+
+function updateToggleOpenBtn() {
+  var statusEl = document.getElementById('ac-submissions-status');
+  var toggleBtn = document.getElementById('ac-toggle-submissions');
+  if (!statusEl || !toggleBtn) return;
+  if (submissionsOpen) {
+    statusEl.textContent = 'Open';
+    statusEl.className = 'vgt-ac-status open';
+    toggleBtn.textContent = 'Close';
+    toggleBtn.className = 'vgt-ac-btn toggle open-state';
+  } else {
+    statusEl.textContent = 'Closed';
+    statusEl.className = 'vgt-ac-status closed';
+    toggleBtn.textContent = 'Open';
+    toggleBtn.className = 'vgt-ac-btn toggle';
+  }
+}
+
+function updateQueueList(queue) {
+  updateToggleOpenBtn();
+  var listEl = document.getElementById('queue-list');
+  var countEl = document.getElementById('queue-count');
+  if (countEl) countEl.textContent = queue ? queue.length : 0;
+
+  if (isDragging || listEl.querySelector('.vgt-queue-name.editing')) return;
+
+  if (!queue) {
+    listEl.innerHTML = '<div class="vgt-queue-state">Failed to load queue.</div>';
+    return;
+  }
+
+  if (queue.length === 0) {
+    listEl.innerHTML = '<div class="vgt-queue-state">The queue is empty.</div>';
+    return;
+  }
+
+  var name      = getEffectiveName();
+  var nameLower = name ? name.toLowerCase() : '';
+
+  var html = '';
+  for (var i = 0; i < queue.length; i++) {
+    var n    = queue[i];
+    var rank = i + 1;
+    var isYou  = n.toLowerCase() === nameLower;
+    var isFirst = rank === 1;
+    var isTop3  = rank <= 3 && !isFirst;
+
+    var cls = 'vgt-queue-item';
+    if (isFirst) cls += ' first';
+    if (isTop3)  cls += ' top3';
+    if (isYou)   cls += ' is-you';
+
+    var badge = '';
+    if (rank === 1)      badge = '<span class="vgt-badge turn">NOW</span>';
+    else if (rank <= 3)  badge = '<span class="vgt-badge soon">SOON</span>';
+
+    var youTag = isYou ? '<span class="you-tag">YOU</span>' : '';
+
+    var online   = isOnline(n);
+    var dotClass = online ? 'vgt-presence online' : 'vgt-presence offline';
+    var dotTitle = online ? 'Online — plugin active' : 'Offline — plugin not detected';
+
+    var adminBtns = '';
+    var dragHandle = '';
+    var nameClass = 'vgt-queue-name';
+    var draggableAttr = '';
+    if (calibrated) {
+      adminBtns =
+        '<span class="vgt-admin-actions">' +
+          '<button class="vgt-admin-action done" data-action="adminDone" data-name="' + escapeHtml(n) + '" title="Mark Done">✓</button>' +
+          '<button class="vgt-admin-action skip" data-action="adminSkip" data-name="' + escapeHtml(n) + '" title="Mark Skip">✗</button>' +
+          '<button class="vgt-admin-action ping" data-action="ping" data-name="' + escapeHtml(n) + '" title="Ping Player">♪</button>' +
+        '</span>';
+      dragHandle = '<span class="vgt-drag-handle" title="Drag to reorder">≡</span>';
+      draggableAttr = ' draggable="true"';
+      nameClass += ' editable';
+    }
+
+    html +=
+      '<div class="' + cls + '" data-index="' + i + '"' + draggableAttr + '>' +
+        dragHandle +
+        '<span class="vgt-queue-rank">#' + rank + '</span>' +
+        '<span class="' + dotClass + '" title="' + dotTitle + '"></span>' +
+        '<span class="' + nameClass + '" data-original="' + escapeHtml(n) + '">' + escapeHtml(n) + youTag + '</span>' +
+        badge +
+        adminBtns +
+      '</div>';
+  }
+
+  listEl.innerHTML = html;
+}
+
+// ── Completed panel ──────────────────────────────────────────────
+
+function updateCompletedPanel() {
+  var toggleBtn = document.getElementById('completed-toggle');
+  var listEl    = document.getElementById('completed-list');
+  if (!toggleBtn || !listEl) return;
+
+  var arrow = toggleBtn.textContent.slice(-1);
+  toggleBtn.textContent = calibrated
+    ? 'Completed (' + completedData.length + ') ' + arrow
+    : 'Completed ' + arrow;
+
+  var search = (document.getElementById('completed-search') || {}).value || '';
+  renderCompletedList(search);
+}
+
+function renderCompletedList(filter) {
+  var listEl = document.getElementById('completed-list');
+  if (!listEl) return;
+  var filtered = completedData;
+  if (filter) {
+    var f = filter.toLowerCase();
+    filtered = completedData.filter(function(n) {
+      return n.toLowerCase().indexOf(f) !== -1;
+    });
+  }
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div class="vgt-completed-item" style="color:var(--text-muted);">No results</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < filtered.length; i++) {
+    html += '<div class="vgt-completed-item">' + escapeHtml(filtered[i]) + '</div>';
+  }
+  listEl.innerHTML = html;
+}
+
+function showCompletedSuggestions(value) {
+  var el = document.getElementById('completed-suggestions');
+  if (!el) return;
+  if (!value) { el.style.display = 'none'; return; }
+  var v = value.toLowerCase();
+  var matches = completedData.filter(function(n) {
+    return n.toLowerCase().indexOf(v) !== -1;
+  });
+  if (matches.length === 0 || (matches.length === 1 && matches[0].toLowerCase() === v)) {
+    el.style.display = 'none';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < Math.min(matches.length, 8); i++) {
+    html += '<div class="vgt-completed-suggestion" data-name="' + escapeHtml(matches[i]) + '">' + escapeHtml(matches[i]) + '</div>';
+  }
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
+// ── Audio alert ───────────────────────────────────────────────────
+
+function playAlert(type) {
+  try {
+    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    var ctx  = new AudioCtx();
+    var osc  = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    var t = ctx.currentTime;
+    if (type === 'turn') {
+      osc.frequency.setValueAtTime(660, t);
+      osc.frequency.setValueAtTime(880, t + 0.12);
+      osc.frequency.setValueAtTime(1100, t + 0.24);
+      gain.gain.setValueAtTime(0.28, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+      osc.start(t);
+      osc.stop(t + 0.55);
+    } else {
+      osc.frequency.setValueAtTime(660, t);
+      osc.frequency.setValueAtTime(880, t + 0.15);
+      gain.gain.setValueAtTime(0.18, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.40);
+      osc.start(t);
+      osc.stop(t + 0.40);
+    }
+  } catch (e) {}
+}
+
+// ── Dot / timestamp helpers ───────────────────────────────────────
+
+function setDot(status) {
+  var dot = document.getElementById('vgt-dot');
+  dot.className = 'vgt-status-dot ' + status;
+}
+
+function updateTimestamp() {
+  var now = new Date();
+  document.getElementById('last-updated').textContent =
+    'Updated ' + now.toLocaleTimeString();
+}
+
+// ── Submissions Status Bar ────────────────────────────────────
+
+function updateSubmissionsStatus() {
+  var el = document.getElementById('submissions-status');
+  if (!el) return;
+  if (submissionsOpen) {
+    el.textContent = 'Submissions open';
+    el.className = 'vgt-submissions-status open';
+  } else {
+    el.textContent = 'Submissions closed';
+    el.className = 'vgt-submissions-status closed';
+  }
+}
+
+// ── Queue actions ─────────────────────────────────────────────────
+
+async function runAction(action, name, btnEl) {
+  if (!calibrated) return;
+  btnEl.disabled = true;
+
+  try {
+    var result;
+    if (action === 'adminDone') {
+      result = await sb.rpc('solak_admin_complete', {
+        pass: adminPass,
+        player_name: name,
+        increment_session: sessionActive
+      });
+    } else if (action === 'adminSkip') {
+      result = await sb.rpc('solak_admin_skip', { pass: adminPass, player_name: name });
+    } else if (action === 'ping') {
+      result = await sb.rpc('admin_ping', { pass: adminPass, target: name });
+    }
+
+    if (result.error) throw result.error;
+
+    btnEl.textContent = '✓';
+    if (action === 'adminDone' && sessionActive) {
+      sessionKillCount++;
+      updateSessionDisplay();
+    }
+  } catch (err) {
+    console.warn('[SLK] Action failed:', err);
+    btnEl.textContent = '!';
+    btnEl.disabled = false;
+  }
+}
+
+// ── Heartbeat ─────────────────────────────────────────────────────
+
+function isOnline(name) {
+  var key  = name.toLowerCase();
+  var ts   = heartbeatData[key];
+  if (!ts) return false;
+  var then = new Date(ts).getTime();
+  if (isNaN(then)) return false;
+  return (Date.now() - then) < ONLINE_THRESHOLD_MS;
+}
+
+// ── Main refresh ──────────────────────────────────────────────────
+
+async function refresh() {
+  setDot('loading');
+
+  var fetches = [fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats(), fetchInfoCode(), fetchBlacklist()];
+  if (calibrated) {
+    fetches.push(fetchSessionState());
+    fetches.push(fetchSkipped());
+  }
+  var results = await Promise.all(fetches);
+  var queue   = results[0];
+
+  if (queue) {
+    setDot('connected');
+  } else {
+    setDot('error');
+  }
+
+  updateSubmissionsStatus();
+  updateStatus(queue);
+  updateQueueList(queue);
+  updateTimestamp();
+}
+
+// ── Realtime subscriptions ────────────────────────────────────────
+
+function onRealtimeChange() {
+  clearTimeout(realtimeDebounce);
+  realtimeDebounce = setTimeout(refresh, 300);
+}
+
+function setupRealtime() {
+  sb.channel('slk-realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'solak_queue' }, onRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'solak_app_state' }, onRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'solak_skipped' }, onRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'blacklist' }, function() { fetchBlacklist(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'solak_completed' }, function() {
+      fetchCompleted();
+      onRealtimeChange();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pings' }, function() {
+      fetchPings();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'heartbeats' }, function() {
+      fetchHeartbeats();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_chat' }, function() {
+      if (chatPanelOpen) fetchAdminChat();
+    })
+    .subscribe();
+}
+
+// ── Session Tracking ─────────────────────────────────────────────
+
+function updateSessionDisplay() {
+  var statusEl = document.getElementById('ac-session-status');
+  var countEl = document.getElementById('ac-session-count');
+  var startBtn = document.getElementById('ac-session-start');
+  var endBtn = document.getElementById('ac-session-end');
+  if (!countEl) return;
+
+  countEl.textContent = 'Kills: ' + sessionKillCount;
+  if (sessionActive) {
+    if (statusEl) { statusEl.textContent = 'Active'; statusEl.className = 'vgt-ac-status active'; }
+    startBtn.style.display = 'none';
+    endBtn.style.display = '';
+  } else {
+    if (statusEl) { statusEl.textContent = 'Inactive'; statusEl.className = 'vgt-ac-status inactive'; }
+    startBtn.style.display = '';
+    endBtn.style.display = 'none';
+  }
+}
+
+// ── Skipped Players ──────────────────────────────────────────────
+
+function renderSkippedPanel() {
+  var listEl = document.getElementById('skipped-list');
+  if (!listEl) return;
+
+  if (skippedData.length === 0) {
+    listEl.innerHTML = '<div class="vgt-skipped-empty">No skipped players</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < skippedData.length; i++) {
+    html += '<div class="vgt-skipped-item">' +
+      '<span class="vgt-skipped-name">' + escapeHtml(skippedData[i]) + '</span>' +
+      '<button class="vgt-unskip-btn" data-name="' + escapeHtml(skippedData[i]) + '">Unskip</button>' +
+      '<button class="vgt-skip-complete-btn" data-name="' + escapeHtml(skippedData[i]) + '">Complete</button>' +
+      '</div>';
+  }
+  listEl.innerHTML = html;
+}
+
+function toggleSkippedPanel(show) {
+  if (!document.body.classList.contains('browser-view')) return;
+  var panel = document.getElementById('skipped-panel');
+  var app = document.querySelector('.vgt-app');
+  if (!panel || !app) return;
+
+  skippedPanelOpen = typeof show === 'boolean' ? show : !skippedPanelOpen;
+
+  if (skippedPanelOpen) {
+    panel.style.display = 'flex';
+    app.classList.add('panel-open');
+    fetchSkipped();
+  } else {
+    panel.style.display = 'none';
+    app.classList.remove('panel-open');
+  }
+}
+
+// ── Completed Side Panel (admin, left) ───────────────────────────
+
+function toggleCompletedSidePanel(show) {
+  if (!document.body.classList.contains('browser-view')) return;
+  var panel = document.getElementById('completed-side-panel');
+  var app = document.querySelector('.vgt-app');
+  if (!panel || !app) return;
+
+  completedSidePanelOpen = typeof show === 'boolean' ? show : !completedSidePanelOpen;
+
+  if (completedSidePanelOpen) {
+    panel.style.display = 'flex';
+    app.classList.add('panel-open-left');
+    renderCompletedSidePanel();
+  } else {
+    panel.style.display = 'none';
+    app.classList.remove('panel-open-left');
+  }
+}
+
+// ── Admin Controls Panel (admin, far left) ───────────────────────
+
+function toggleAdminControlsPanel(show) {
+  if (!document.body.classList.contains('browser-view')) return;
+  var panel = document.getElementById('admin-controls-panel');
+  var completedPanel = document.getElementById('completed-side-panel');
+  if (!panel) return;
+
+  adminControlsPanelOpen = typeof show === 'boolean' ? show : !adminControlsPanelOpen;
+
+  if (adminControlsPanelOpen) {
+    panel.style.display = 'flex';
+    if (completedPanel) completedPanel.classList.add('has-neighbor-left');
+    var worldInput = document.getElementById('ac-world-input');
+    if (worldInput) worldInput.value = currentWorld;
+    updateToggleOpenBtn();
+    updateSessionDisplay();
+  } else {
+    panel.style.display = 'none';
+    if (completedPanel) completedPanel.classList.remove('has-neighbor-left');
+  }
+}
+
+function renderCompletedSidePanel(filter) {
+  var listEl = document.getElementById('completed-side-list');
+  if (!listEl) return;
+
+  var filtered = completedData;
+  if (filter) {
+    var f = filter.toLowerCase();
+    filtered = completedData.filter(function(n) {
+      return n.toLowerCase().indexOf(f) !== -1;
+    });
+  }
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div class="vgt-completed-side-empty">' + (filter ? 'No results' : 'No completed kills') + '</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < filtered.length; i++) {
+    html += '<div class="vgt-completed-side-item">' +
+      '<span class="vgt-completed-side-name" data-original="' + escapeHtml(filtered[i]) + '">' + escapeHtml(filtered[i]) + '</span>' +
+      '<button class="vgt-completed-side-skip" data-name="' + escapeHtml(filtered[i]) + '" title="Move to skipped">✗</button>' +
+      '</div>';
+  }
+  listEl.innerHTML = html;
+}
+
+// ── Admin Chat ────────────────────────────────────────────────────
+
+async function fetchAdminChat() {
+  try {
+    var result = await sb.from('admin_chat').select('*').order('created_at', { ascending: true }).limit(100);
+    if (result.error) throw result.error;
+    chatMessages = result.data || [];
+    renderChatMessages();
+  } catch (err) {
+    console.warn('[SLK] Failed to fetch chat:', err);
+  }
+}
+
+function renderChatMessages() {
+  var el = document.getElementById('chat-messages');
+  if (!el) return;
+
+  if (chatMessages.length === 0) {
+    el.innerHTML = '<div class="vgt-chat-empty">No messages yet</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < chatMessages.length; i++) {
+    var m = chatMessages[i];
+    var time = '';
+    try {
+      var d = new Date(m.created_at);
+      time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {}
+    html += '<div class="vgt-chat-msg">' +
+      '<span class="vgt-chat-msg-time">' + escapeHtml(time) + '</span>' +
+      '<span class="vgt-chat-msg-name">' + escapeHtml(m.sender || 'Admin') + '</span>' +
+      '<div class="vgt-chat-msg-text">' + escapeHtml(m.message) + '</div>' +
+      '</div>';
+  }
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendChatMessage() {
+  var input = document.getElementById('chat-input');
+  var msg = input.value.trim();
+  if (!msg || !calibrated) return;
+
+  var sender = getEffectiveName() || 'Admin';
+  var btn = document.getElementById('chat-send-btn');
+  btn.disabled = true;
+  input.disabled = true;
+
+  try {
+    var result = await sb.rpc('send_admin_chat', { pass: adminPass, msg: msg, sender_name: sender });
+    if (result.error) throw result.error;
+    input.value = '';
+  } catch (err) {
+    console.warn('[SLK] Send chat failed:', err);
+  }
+
+  btn.disabled = false;
+  input.disabled = false;
+  input.focus();
+}
+
+function toggleChatPanel(show) {
+  if (!document.body.classList.contains('browser-view')) return;
+  var panel = document.getElementById('chat-panel');
+  var skippedPanel = document.getElementById('skipped-panel');
+  if (!panel) return;
+
+  chatPanelOpen = typeof show === 'boolean' ? show : !chatPanelOpen;
+
+  if (chatPanelOpen) {
+    panel.style.display = 'flex';
+    if (skippedPanel) skippedPanel.classList.add('has-neighbor-right');
+    fetchAdminChat();
+  } else {
+    panel.style.display = 'none';
+    if (skippedPanel) skippedPanel.classList.remove('has-neighbor-right');
+  }
+}
+
+// ── Info Side Panel (right of app, Info tab) ──────────────────────
+
+function toggleInfoSidePanel(show) {
+  if (!document.body.classList.contains('browser-view')) return;
+  var panel = document.getElementById('info-side-panel');
+  var app = document.querySelector('.vgt-app');
+  if (!panel) return;
+
+  if (show) {
+    panel.style.display = 'flex';
+    if (app) app.classList.add('panel-open');
+  } else {
+    panel.style.display = 'none';
+    if (app && !skippedPanelOpen) app.classList.remove('panel-open');
+  }
+}
+
+// ── Blacklist ─────────────────────────────────────────────────────
+
+function checkBanned() {
+  var name = getEffectiveName().toLowerCase();
+  var banned = name && blacklist.indexOf(name) !== -1;
+  var bannedOverlay = document.getElementById('banned-overlay');
+  var joinBtn = document.getElementById('join-queue-btn');
+  if (bannedOverlay) bannedOverlay.style.display = banned ? 'flex' : 'none';
+  if (joinBtn) joinBtn.style.display = banned ? 'none' : '';
+}
+
+function renderBlacklistPanel() {
+  var list = document.getElementById('ac-blacklist-list');
+  if (!list) return;
+  if (blacklist.length === 0) {
+    list.innerHTML = '<div style="color:#666;font-size:12px;padding:4px 0;">No banned players</div>';
+    return;
+  }
+  list.innerHTML = blacklist.map(function(name) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px;">' +
+      '<span style="color:#eee;">' + escapeHtml(name) + '</span>' +
+      '<button onclick="unbanPlayer(\'' + escapeHtml(name) + '\')" style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">Unban</button>' +
+      '</div>';
+  }).join('');
+}
+
+function unbanPlayer(name) {
+  if (!superCalibrated) return;
+  sb.rpc('super_admin_remove_blacklist', { pass: superAdminPass, player_name: name })
+    .then(function(res) {
+      if (res.error) console.warn('[SLK] Unban failed:', res.error);
+      else fetchBlacklist();
+    });
+}
+
+// ── Join Queue ────────────────────────────────────────────────────
+
+var lastSubmittedName = '';
+var lastSubmitTime    = 0;
+
+async function joinQueue() {
+  var name = getEffectiveName();
+  if (!name) return;
+  if (blacklist.indexOf(name.toLowerCase()) !== -1) return;
+
+  var infoInput = document.getElementById('info-phrase-input');
+  var infoValue = infoInput ? infoInput.value.trim().toLowerCase() : '';
+  if (infoValue !== INFO_CODE) return;
+
+  var btn = document.getElementById('join-queue-btn');
+
+  if (name.toLowerCase() === lastSubmittedName.toLowerCase() && Date.now() - lastSubmitTime < 30000) {
+    btn.textContent = 'Already submitted';
+    btn.disabled = true;
+    btn.classList.add('submitted');
+    setTimeout(function() {
+      btn.textContent = '+ Join Queue';
+      btn.disabled = false;
+      btn.classList.remove('submitted');
+    }, 3000);
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'Submitting...';
+
+  try {
+    var result = await sb.rpc('solak_join_queue', { player_name: name });
+    if (result.error) throw result.error;
+    var data = result.data;
+    if (data.ok) {
+      btn.textContent = '✓ Joined queue!';
+      lastSubmittedName = name;
+      lastSubmitTime = Date.now();
+    } else if (data.error === 'duplicate') {
+      btn.textContent = 'Already in queue';
+    } else {
+      btn.textContent = '✗ Failed — try again';
+    }
+  } catch (e) {
+    console.warn('[SLK] Join queue error:', e);
+    btn.textContent = '✗ Error — try again';
+  }
+
+  btn.classList.add('submitted');
+  setTimeout(function() {
+    btn.textContent = '+ Join Queue';
+    btn.disabled    = false;
+    btn.classList.remove('submitted');
+    refresh();
+  }, 4000);
+}
+
+// ── Initialise ────────────────────────────────────────────────────
+
+function init() {
+  try {
+    var saved = localStorage.getItem('slk_playerName');
+    if (saved && saved.trim()) {
+      document.getElementById('name-override').value = saved.trim();
+    }
+  } catch (e) {}
+
+  // ── Reminder toggle
+  var reminderToggle = document.getElementById('reminder-toggle');
+  var savedReminder = localStorage.getItem('slk_remindersEnabled');
+  if (savedReminder !== null) {
+    reminderToggle.checked = savedReminder === 'true';
+  }
+  window.VGT_remindersEnabled = reminderToggle.checked;
+  reminderToggle.addEventListener('change', function() {
+    window.VGT_remindersEnabled = this.checked;
+    localStorage.setItem('slk_remindersEnabled', this.checked);
+  });
+
+  // ── Tab switching
+  function switchToTab(tabName) {
+    document.querySelectorAll('.vgt-tab').forEach(function(t) {
+      t.classList.remove('active');
+    });
+    document.querySelectorAll('.vgt-page').forEach(function(p) {
+      p.classList.remove('active');
+    });
+    var tabBtn = document.querySelector('.vgt-tab[data-tab="' + tabName + '"]');
+    if (tabBtn) tabBtn.classList.add('active');
+    var tabPage = document.getElementById('tab-' + tabName);
+    if (tabPage) tabPage.classList.add('active');
+    try { localStorage.setItem('slk_activeTab', tabName); } catch (e) {}
+    if (calibrated && tabName === 'queue') {
+      toggleAdminControlsPanel(true);
+      toggleSkippedPanel(true);
+      toggleCompletedSidePanel(true);
+      toggleChatPanel(true);
+    } else {
+      toggleAdminControlsPanel(false);
+      toggleSkippedPanel(false);
+      toggleCompletedSidePanel(false);
+      toggleChatPanel(false);
+    }
+    toggleInfoSidePanel(tabName === 'info');
+  }
+
+  document.querySelectorAll('.vgt-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      switchToTab(tab.dataset.tab);
+    });
+  });
+
+  var savedTab = localStorage.getItem('slk_activeTab') || 'info';
+  switchToTab(savedTab);
+
+  // ── Name input
+  var nameDebounce = null;
+  var heartbeatDebounce = null;
+  document.getElementById('name-override').addEventListener('input', function() {
+    try { localStorage.setItem('slk_playerName', this.value.trim()); } catch (e) {}
+    updateStatus(queueData);
+    updateQueueList(queueData);
+    checkBanned();
+    clearTimeout(nameDebounce);
+    nameDebounce = setTimeout(refresh, 1000);
+    clearTimeout(heartbeatDebounce);
+    heartbeatDebounce = setTimeout(sendHeartbeat, 5000);
+  });
+
+  // ── Info phrase input
+  document.getElementById('info-phrase-input').addEventListener('input', function() {
+    updateStatus(queueData);
+  });
+
+  // ── Join Queue button
+  document.getElementById('join-queue-btn').addEventListener('click', joinQueue);
+
+  // ── Refresh buttons
+  document.getElementById('refresh-btn').addEventListener('click', refresh);
+  document.getElementById('refresh-btn-queue').addEventListener('click', refresh);
+
+  // ── Initial load
+  refresh();
+  fetchCompleted();
+
+  // ── Realtime — instant updates from Supabase
+  setupRealtime();
+
+  // ── Heartbeat — announce presence every 15 s
+  sendHeartbeat();
+  heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
+
+  // ── Admin helpers ───────────────────────────────────────────────
+  function activateAdmin(pass) {
+    calibrated = true;
+    adminPass = pass;
+    try {
+      localStorage.setItem('slk_adminPass', pass);
+      localStorage.setItem('slk_adminExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    } catch (e) {}
+    var ab = document.getElementById('admin-btn');
+    ab.textContent = 'Admin ✓';
+    ab.classList.add('active');
+    updateQueueList(queueData);
+    var activeTab = document.querySelector('.vgt-tab.active');
+    if (activeTab && activeTab.dataset.tab === 'queue') {
+      toggleAdminControlsPanel(true);
+      toggleSkippedPanel(true);
+      toggleCompletedSidePanel(true);
+      toggleChatPanel(true);
+    }
+    fetchSessionState();
+    updateToggleOpenBtn();
+    var qtc = document.getElementById('queue-total-carries');
+    if (qtc) qtc.style.display = '';
+  }
+
+  function deactivateAdmin() {
+    calibrated = false;
+    adminPass = '';
+    deactivateSuperAdmin();
+    try {
+      localStorage.removeItem('slk_adminPass');
+      localStorage.removeItem('slk_adminExpiry');
+    } catch (e) {}
+    var ab = document.getElementById('admin-btn');
+    ab.textContent = 'Admin';
+    ab.classList.remove('active');
+    toggleAdminControlsPanel(false);
+    toggleSkippedPanel(false);
+    toggleCompletedSidePanel(false);
+    toggleChatPanel(false);
+    updateQueueList(queueData);
+    var qtc = document.getElementById('queue-total-carries');
+    if (qtc) qtc.style.display = 'none';
+  }
+
+  function activateSuperAdmin(pass) {
+    superCalibrated = true;
+    superAdminPass = pass;
+    try {
+      localStorage.setItem('slk_superPass', pass);
+      localStorage.setItem('slk_superExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    } catch (e) {}
+    var section = document.getElementById('ac-blacklist-section');
+    if (section) section.style.display = '';
+    if (!calibrated) {
+      var ab = document.getElementById('admin-btn');
+      if (ab) { ab.textContent = 'Admin ✓'; ab.classList.add('active'); }
+      toggleAdminControlsPanel(true);
+    }
+    fetchBlacklist();
+  }
+
+  function deactivateSuperAdmin() {
+    superCalibrated = false;
+    superAdminPass = '';
+    try {
+      localStorage.removeItem('slk_superPass');
+      localStorage.removeItem('slk_superExpiry');
+    } catch (e) {}
+    var section = document.getElementById('ac-blacklist-section');
+    if (section) section.style.display = 'none';
+    if (!calibrated) {
+      var ab = document.getElementById('admin-btn');
+      if (ab) { ab.textContent = 'Admin'; ab.classList.remove('active'); }
+      toggleAdminControlsPanel(false);
+    }
+  }
+
+  // ── Blacklist ban button ────────────────────────────────────────
+  var blacklistInput  = document.getElementById('ac-blacklist-input');
+  var blacklistAddBtn = document.getElementById('ac-blacklist-add-btn');
+  if (blacklistAddBtn) {
+    blacklistAddBtn.addEventListener('click', function() {
+      if (!superCalibrated) return;
+      var name = blacklistInput ? blacklistInput.value.trim() : '';
+      if (!name) return;
+      sb.rpc('super_admin_add_blacklist', { pass: superAdminPass, player_name: name })
+        .then(function(res) {
+          if (res.error) console.warn('[SLK] Ban failed:', res.error);
+          else { if (blacklistInput) blacklistInput.value = ''; fetchBlacklist(); }
+        });
+    });
+  }
+
+  // ── Auto-login from saved session ─────────────────────────────
+  try {
+    var savedPass = localStorage.getItem('slk_adminPass');
+    var savedExpiry = localStorage.getItem('slk_adminExpiry');
+    if (savedPass && savedExpiry && Date.now() < Number(savedExpiry)) {
+      sb.rpc('check_admin', { pass: savedPass }).then(function(result) {
+        if (result.data === true) {
+          activateAdmin(savedPass);
+          sb.rpc('check_super_admin', { pass: savedPass }).then(function(r) {
+            if (r.data === true) activateSuperAdmin(savedPass);
+          });
+        } else {
+          localStorage.removeItem('slk_adminPass');
+          localStorage.removeItem('slk_adminExpiry');
+        }
+      });
+    } else {
+      localStorage.removeItem('slk_adminPass');
+      localStorage.removeItem('slk_adminExpiry');
+    }
+  } catch (e) {}
+
+  try {
+    var savedSuperPass = localStorage.getItem('slk_superPass');
+    var savedSuperExpiry = localStorage.getItem('slk_superExpiry');
+    if (savedSuperPass && savedSuperExpiry && Date.now() < Number(savedSuperExpiry)) {
+      sb.rpc('check_super_admin', { pass: savedSuperPass }).then(function(result) {
+        if (result.data === true) {
+          if (!calibrated) activateAdmin(savedSuperPass);
+          activateSuperAdmin(savedSuperPass);
+        } else {
+          localStorage.removeItem('slk_superPass');
+          localStorage.removeItem('slk_superExpiry');
+        }
+      });
+    } else {
+      localStorage.removeItem('slk_superPass');
+      localStorage.removeItem('slk_superExpiry');
+    }
+  } catch (e) {}
+
+  // ── Admin login ──────────────────────────────────────────────────
+  var adminBtn       = document.getElementById('admin-btn');
+  var adminOverlay   = document.getElementById('admin-overlay');
+  var adminPassInput = document.getElementById('admin-pass-input');
+  var adminLoginBtn  = document.getElementById('admin-login-btn');
+  var adminCancelBtn = document.getElementById('admin-cancel-btn');
+  var adminError     = document.getElementById('admin-error');
+
+  adminBtn.addEventListener('click', function() {
+    if (calibrated) {
+      deactivateAdmin();
+      return;
+    }
+    adminOverlay.style.display = 'flex';
+    adminPassInput.value = '';
+    adminError.style.display = 'none';
+    adminPassInput.focus();
+  });
+
+  adminCancelBtn.addEventListener('click', function() {
+    adminOverlay.style.display = 'none';
+  });
+
+  async function attemptCalibration() {
+    var entered = adminPassInput.value.trim();
+    if (!entered) return;
+    adminLoginBtn.disabled = true;
+    try {
+      var result = await sb.rpc('check_admin', { pass: entered });
+      if (result.error) throw result.error;
+      if (result.data === true) {
+        activateAdmin(entered);
+        adminOverlay.style.display = 'none';
+        sb.rpc('check_super_admin', { pass: entered }).then(function(r) {
+          if (r.data === true) activateSuperAdmin(entered);
+        });
+      } else {
+        var superResult = await sb.rpc('check_super_admin', { pass: entered });
+        if (superResult.data === true) {
+          activateAdmin(entered);
+          activateSuperAdmin(entered);
+          adminOverlay.style.display = 'none';
+        } else {
+          adminError.textContent = 'Invalid key';
+          adminError.style.display = 'block';
+          adminPassInput.value = '';
+          adminPassInput.focus();
+        }
+      }
+    } catch (err) {
+      adminError.textContent = 'Could not verify — retry';
+      adminError.style.display = 'block';
+    }
+    adminLoginBtn.disabled = false;
+  }
+
+  adminLoginBtn.addEventListener('click', attemptCalibration);
+
+  adminPassInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') attemptCalibration();
+    if (e.key === 'Escape') adminOverlay.style.display = 'none';
+  });
+
+  // ── Queue action delegation ──────────────────────────────────────
+  var queueListEl = document.getElementById('queue-list');
+
+  queueListEl.addEventListener('click', function(e) {
+    if (!calibrated) return;
+
+    var btn = e.target.closest('.vgt-admin-action');
+    if (btn && !btn.disabled) {
+      var action = btn.getAttribute('data-action');
+      var name   = btn.getAttribute('data-name');
+      if (action && name) runAction(action, name, btn);
+      return;
+    }
+
+    var nameEl = e.target.closest('.vgt-queue-name.editable');
+    if (nameEl && !nameEl.classList.contains('editing')) {
+      var original = nameEl.getAttribute('data-original');
+      nameEl.classList.add('editing');
+
+      var input = document.createElement('input');
+      input.className = 'vgt-queue-name-input';
+      input.type = 'text';
+      input.value = original;
+      input.setAttribute('autocomplete', 'off');
+      input.setAttribute('autocorrect', 'off');
+      input.setAttribute('autocapitalize', 'off');
+      input.setAttribute('spellcheck', 'false');
+      input.setAttribute('data-lpignore', 'true');
+      input.setAttribute('data-1p-ignore', 'true');
+      input.setAttribute('data-bwignore', 'true');
+      input.setAttribute('data-protonpass-ignore', 'true');
+      input.setAttribute('data-form-type', 'other');
+      input.setAttribute('role', 'presentation');
+      input.setAttribute('name', 'slk-edit-' + Date.now());
+
+      nameEl.textContent = '';
+      nameEl.appendChild(input);
+      input.focus();
+      input.select();
+
+      var saved = false;
+      var blurTimeout = null;
+
+      function saveEdit() {
+        if (saved) return;
+        saved = true;
+        if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+        var newName = input.value.trim();
+        if (newName && newName !== original) {
+          nameEl.textContent = newName;
+          nameEl.classList.remove('editing');
+          sb.rpc('solak_admin_edit_name', { pass: adminPass, old_name: original, new_name: newName })
+            .catch(function(err) { console.warn('[SLK] Edit failed:', err); });
+        } else {
+          nameEl.textContent = original;
+          nameEl.classList.remove('editing');
+        }
+      }
+
+      input.addEventListener('blur', function() {
+        blurTimeout = setTimeout(saveEdit, 150);
+      });
+
+      input.addEventListener('focus', function() {
+        if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+      });
+
+      input.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); saveEdit(); }
+        if (ev.key === 'Escape') {
+          saved = true;
+          if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+          nameEl.textContent = original;
+          nameEl.classList.remove('editing');
+        }
+      });
+    }
+  });
+
+  // ── Drag-and-drop reordering ────────────────────────────────────
+  queueListEl.addEventListener('dragstart', function(e) {
+    var item = e.target.closest('.vgt-queue-item[draggable="true"]');
+    if (!item || !calibrated) return;
+    dragSrcIndex = parseInt(item.getAttribute('data-index'), 10);
+    isDragging = true;
+    item.classList.add('vgt-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '' + dragSrcIndex);
+  });
+
+  queueListEl.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    var item = e.target.closest('.vgt-queue-item');
+    if (!item) return;
+    var items = queueListEl.querySelectorAll('.vgt-queue-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('vgt-drop-above', 'vgt-drop-below');
+    }
+    var idx = parseInt(item.getAttribute('data-index'), 10);
+    var rect = item.getBoundingClientRect();
+    var midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+      item.classList.add('vgt-drop-above');
+      dragOverIndex = idx;
+    } else {
+      item.classList.add('vgt-drop-below');
+      dragOverIndex = idx + 1;
+    }
+  });
+
+  queueListEl.addEventListener('dragleave', function(e) {
+    var item = e.target.closest('.vgt-queue-item');
+    if (item) {
+      item.classList.remove('vgt-drop-above', 'vgt-drop-below');
+    }
+  });
+
+  queueListEl.addEventListener('dragend', function() {
+    isDragging = false;
+    dragSrcIndex = -1;
+    dragOverIndex = -1;
+    var items = queueListEl.querySelectorAll('.vgt-queue-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('vgt-dragging', 'vgt-drop-above', 'vgt-drop-below');
+    }
+  });
+
+  queueListEl.addEventListener('drop', function(e) {
+    e.preventDefault();
+    var targetIdx = dragOverIndex;
+    var srcIdx = dragSrcIndex;
+
+    isDragging = false;
+    dragSrcIndex = -1;
+    dragOverIndex = -1;
+    var items = queueListEl.querySelectorAll('.vgt-queue-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('vgt-dragging', 'vgt-drop-above', 'vgt-drop-below');
+    }
+
+    if (srcIdx === -1 || targetIdx === -1 || srcIdx === targetIdx) return;
+    if (targetIdx > srcIdx) targetIdx--;
+    if (srcIdx === targetIdx) return;
+
+    var movedName = queueData[srcIdx];
+    queueData.splice(srcIdx, 1);
+    queueData.splice(targetIdx, 0, movedName);
+    updateQueueList(queueData);
+
+    sb.rpc('solak_admin_reorder_queue', { pass: adminPass, player_name: movedName, new_position: targetIdx })
+      .then(function(res) {
+        if (res.error) { console.warn('[SLK] Reorder failed:', res.error); refresh(); }
+      })
+      .catch(function(err) { console.warn('[SLK] Reorder failed:', err); refresh(); });
+  });
+
+  // ── Admin controls panel buttons ─────────────────────────────
+  document.getElementById('ac-toggle-submissions').addEventListener('click', async function() {
+    if (!calibrated) return;
+    var btn = this;
+    btn.disabled = true;
+    try {
+      var result = await sb.rpc('solak_admin_toggle_submissions', { pass: adminPass });
+      if (result.error) throw result.error;
+      submissionsOpen = result.data === 'true';
+      updateToggleOpenBtn();
+      updateSubmissionsStatus();
+    } catch (err) {
+      console.warn('[SLK] Failed to toggle open:', err);
+    }
+    btn.disabled = false;
+  });
+
+  // ── Completed panel toggle + search ─────────────────────────────
+  document.getElementById('completed-toggle').addEventListener('click', function() {
+    var body = document.getElementById('completed-body');
+    var open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    var arrow = open ? '▸' : '▾';
+    this.textContent = calibrated
+      ? 'Completed (' + completedData.length + ') ' + arrow
+      : 'Completed ' + arrow;
+  });
+
+  document.getElementById('completed-search').addEventListener('input', function() {
+    var val = this.value.trim();
+    renderCompletedList(val);
+    showCompletedSuggestions(val);
+  });
+
+  document.getElementById('completed-suggestions').addEventListener('click', function(e) {
+    var item = e.target.closest('.vgt-completed-suggestion');
+    if (!item) return;
+    var name = item.getAttribute('data-name');
+    var input = document.getElementById('completed-search');
+    input.value = name;
+    renderCompletedList(name);
+    this.style.display = 'none';
+  });
+
+  // ── Session Start / End buttons (admin controls panel) ──────────
+  document.getElementById('ac-session-start').addEventListener('click', async function() {
+    if (!calibrated) return;
+    this.disabled = true;
+    try {
+      var result = await sb.rpc('solak_admin_session_start', { pass: adminPass });
+      if (result.error) throw result.error;
+      sessionActive = true;
+      sessionKillCount = 0;
+      updateSessionDisplay();
+    } catch (err) {
+      console.warn('[SLK] Session start failed:', err);
+    }
+    this.disabled = false;
+  });
+
+  document.getElementById('ac-session-end').addEventListener('click', async function() {
+    if (!calibrated) return;
+    this.disabled = true;
+    try {
+      var result = await sb.rpc('solak_admin_session_end', { pass: adminPass });
+      if (result.error) throw result.error;
+      sessionActive = false;
+      updateSessionDisplay();
+    } catch (err) {
+      console.warn('[SLK] Session end failed:', err);
+    }
+    this.disabled = false;
+  });
+
+  // ── World input (admin controls panel) ─────────────────────────
+  var worldDebounce = null;
+  document.getElementById('ac-world-input').addEventListener('input', function() {
+    var val = this.value.trim();
+    clearTimeout(worldDebounce);
+    worldDebounce = setTimeout(function() {
+      if (!calibrated) return;
+      currentWorld = val;
+      var el = document.getElementById('vgt-world');
+      if (el) el.textContent = val ? 'World: ' + val : '';
+      var worldInput = document.getElementById('ac-world-input');
+      sb.rpc('solak_admin_set_world', { pass: adminPass, new_world: val })
+        .then(function(res) {
+          if (res.error) {
+            console.warn('[SLK] World update failed:', res.error);
+            if (worldInput) { worldInput.style.borderColor = '#e74c3c'; setTimeout(function() { worldInput.style.borderColor = ''; }, 2000); }
+          } else {
+            if (worldInput) { worldInput.style.borderColor = '#2ecc71'; setTimeout(function() { worldInput.style.borderColor = ''; }, 2000); }
+          }
+        });
+    }, 500);
+  });
+
+  // ── Completed side panel search ──────────────────────────────────
+  document.getElementById('completed-side-search').addEventListener('input', function() {
+    renderCompletedSidePanel(this.value.trim());
+  });
+
+  // ── Completed side panel actions ────────────────────────────────
+  document.getElementById('completed-side-list').addEventListener('click', function(e) {
+    if (!calibrated) return;
+
+    var skipBtn = e.target.closest('.vgt-completed-side-skip');
+    if (skipBtn && !skipBtn.disabled) {
+      var skipName = skipBtn.getAttribute('data-name');
+      skipBtn.disabled = true;
+      skipBtn.textContent = '...';
+      sb.rpc('solak_admin_uncomplete_to_skip', { pass: adminPass, player_name: skipName })
+        .then(function(result) {
+          if (result.error) throw result.error;
+          var item = skipBtn.closest('.vgt-completed-side-item');
+          if (item) item.remove();
+        })
+        .catch(function(err) {
+          console.warn('[SLK] Uncomplete to skip failed:', err);
+          skipBtn.disabled = false;
+          skipBtn.textContent = '✗';
+        });
+      return;
+    }
+
+    var nameEl = e.target.closest('.vgt-completed-side-name');
+    if (!nameEl || nameEl.classList.contains('editing')) return;
+
+    var original = nameEl.getAttribute('data-original');
+    nameEl.classList.add('editing');
+
+    var input = document.createElement('input');
+    input.className = 'vgt-completed-side-edit';
+    input.type = 'text';
+    input.value = original;
+    input.setAttribute('autocomplete', 'off');
+    input.setAttribute('spellcheck', 'false');
+    input.setAttribute('data-lpignore', 'true');
+    input.setAttribute('data-1p-ignore', 'true');
+
+    nameEl.textContent = '';
+    nameEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    var saved = false;
+    var blurTimeout = null;
+
+    function saveEdit() {
+      if (saved) return;
+      saved = true;
+      if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+      var newName = input.value.trim();
+      if (newName && newName !== original) {
+        nameEl.textContent = newName;
+        nameEl.setAttribute('data-original', newName);
+        nameEl.classList.remove('editing');
+        sb.rpc('solak_admin_edit_completed_name', { pass: adminPass, old_name: original, new_name: newName })
+          .catch(function(err) { console.warn('[SLK] Completed edit failed:', err); });
+      } else {
+        nameEl.textContent = original;
+        nameEl.classList.remove('editing');
+      }
+    }
+
+    input.addEventListener('blur', function() {
+      blurTimeout = setTimeout(saveEdit, 150);
+    });
+
+    input.addEventListener('focus', function() {
+      if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+    });
+
+    input.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); saveEdit(); }
+      if (ev.key === 'Escape') {
+        saved = true;
+        if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+        nameEl.textContent = original;
+        nameEl.classList.remove('editing');
+      }
+    });
+  });
+
+  // ── Admin chat send ────────────────────────────────────────────────
+  document.getElementById('chat-send-btn').addEventListener('click', sendChatMessage);
+  document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
+  });
+
+  // ── Skipped panel delegation ─────────────────────────────────────
+  document.getElementById('skipped-list').addEventListener('click', async function(e) {
+    if (!calibrated) return;
+
+    var unskipBtn = e.target.closest('.vgt-unskip-btn');
+    if (unskipBtn && !unskipBtn.disabled) {
+      var name = unskipBtn.getAttribute('data-name');
+      unskipBtn.disabled = true;
+      unskipBtn.textContent = '...';
+      try {
+        var result = await sb.rpc('solak_admin_unskip', { pass: adminPass, player_name: name });
+        if (result.error) throw result.error;
+        skippedData = skippedData.filter(function(n) { return n !== name; });
+        renderSkippedPanel();
+      } catch (err) {
+        console.warn('[SLK] Unskip failed:', err);
+        unskipBtn.disabled = false;
+        unskipBtn.textContent = 'Unskip';
+      }
+      return;
+    }
+
+    var completeBtn = e.target.closest('.vgt-skip-complete-btn');
+    if (completeBtn && !completeBtn.disabled) {
+      var cName = completeBtn.getAttribute('data-name');
+      completeBtn.disabled = true;
+      completeBtn.textContent = '...';
+      try {
+        var result = await sb.rpc('solak_admin_skip_to_complete', { pass: adminPass, player_name: cName });
+        if (result.error) throw result.error;
+        skippedData = skippedData.filter(function(n) { return n !== cName; });
+        renderSkippedPanel();
+      } catch (err) {
+        console.warn('[SLK] Skip to complete failed:', err);
+        completeBtn.disabled = false;
+        completeBtn.textContent = 'Complete';
+      }
+    }
+  });
+}
+
+// ── Identify app to Alt1 on script load ───────────────────────────
+if (typeof alt1 !== 'undefined') {
+  try {
+    alt1.identifyAppUrl('./solakappconfig.json');
+  } catch (e) {
+    console.error('[SLK] identifyAppUrl error:', e);
+  }
+} else {
+  document.body.classList.add('browser-view');
+  var banner = document.getElementById('alt1-banner');
+  if (banner) banner.style.display = 'flex';
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

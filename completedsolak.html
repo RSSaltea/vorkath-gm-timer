@@ -3,13 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vorkath GM — Completed</title>
+  <title>Solak GM — Completed</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    @font-face {
-      font-family: 'rs-pro-3';
-      src: url(src/css/style.css) format('truetype');
-    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: #0a0a0e;
@@ -47,6 +43,32 @@
       font-size: 12px;
       color: #6e7380;
     }
+    .game-switch {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .switch-btn {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #26263a;
+      background: #16161f;
+      color: #9aa0a6;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .switch-btn:hover { border-color: #4a9eff; color: #4a9eff; }
+    .switch-active {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #27ae60;
+      background: rgba(39,174,96,0.12);
+      color: #27ae60;
+      font-weight: 600;
+    }
     .search-wrap {
       position: relative;
       margin-bottom: 12px;
@@ -63,7 +85,7 @@
       outline: none;
     }
     .search-input:focus {
-      border-color: #4a9eff;
+      border-color: #27ae60;
     }
     .search-input::placeholder {
       color: #6e7380;
@@ -105,42 +127,16 @@
       color: #6e7380;
       padding: 12px;
     }
-    .game-switch {
-      display: flex;
-      gap: 4px;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .switch-btn {
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      border: 1px solid #26263a;
-      background: #16161f;
-      color: #9aa0a6;
-      text-decoration: none;
-      cursor: pointer;
-    }
-    .switch-btn:hover { border-color: #27ae60; color: #27ae60; }
-    .switch-active {
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      border: 1px solid #4a9eff;
-      background: rgba(74,158,255,0.12);
-      color: #4a9eff;
-      font-weight: 600;
-    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <div class="title">Vorkath GM — Completed Kills</div>
+      <div class="title">Solak GM — Completed Kills</div>
     </div>
     <div class="game-switch">
-      <span class="switch-active">🐉 Vorkath</span>
-      <a class="switch-btn" href="completedsolak.html">⚔️ Solak</a>
+      <a class="switch-btn" href="completed.html">🐉 Vorkath</a>
+      <span class="switch-active">⚔️ Solak</span>
     </div>
     <div class="search-wrap">
       <input class="search-input" id="search" type="text" placeholder="Search names..." autocomplete="off" spellcheck="false" />
@@ -158,7 +154,7 @@
 
     async function fetchCompleted() {
       try {
-        var result = await sb.from('completed').select('name').order('completed_at', { ascending: false });
+        var result = await sb.from('solak_completed').select('name').order('completed_at', { ascending: false });
         if (result.error) throw result.error;
         completedData = result.data ? result.data.map(function(r) { return r.name; }) : [];
         renderList('');
@@ -195,9 +191,8 @@
 
     fetchCompleted();
 
-    // Realtime subscription
-    sb.channel('completed-page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'completed' }, function() { fetchCompleted(); })
+    sb.channel('solak-completed-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solak_completed' }, function() { fetchCompleted(); })
       .subscribe();
   </script>
 </body>

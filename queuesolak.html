@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vorkath GM — Queue</title>
+  <title>Solak GM — Queue</title>
   <link rel="icon" href="./src/icon1.png" type="image/png" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
@@ -52,14 +52,40 @@
     .fc-name {
       font-size: 22px;
       font-weight: 700;
-      color: #4a9eff;
+      color: #27ae60;
       letter-spacing: 0.5px;
-      text-shadow: 0 1px 8px rgba(74,158,255,0.35);
+      text-shadow: 0 1px 8px rgba(39,174,96,0.35);
     }
     .fc-world {
       font-size: 25px;
       color: #9aa0a6;
       margin-top: 2px;
+    }
+    .game-switch {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .switch-btn {
+      font-size: 17px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #26263a;
+      background: #16161f;
+      color: #9aa0a6;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .switch-btn:hover { border-color: #4a9eff; color: #4a9eff; }
+    .switch-active {
+      font-size: 17px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #27ae60;
+      background: rgba(39,174,96,0.12);
+      color: #27ae60;
+      font-weight: 600;
     }
 
     /* Hero card for #1 */
@@ -69,8 +95,6 @@
       border-radius: 5px;
       padding: 10px 14px;
       margin-bottom: 3px;
-    }
-    .hero {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -130,9 +154,9 @@
     .fc-footer {
       font-size: 22px;
       font-weight: 700;
-      color: #4a9eff;
+      color: #27ae60;
       letter-spacing: 0.5px;
-      text-shadow: 0 1px 8px rgba(74,158,255,0.35);
+      text-shadow: 0 1px 8px rgba(39,174,96,0.35);
       text-align: center;
       padding: 10px 0 4px;
     }
@@ -152,39 +176,13 @@
       color: #6e7380;
       padding: 20px;
     }
-    .game-switch {
-      display: flex;
-      gap: 4px;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .switch-btn {
-      font-size: 17px;
-      padding: 4px 10px;
-      border-radius: 4px;
-      border: 1px solid #26263a;
-      background: #16161f;
-      color: #9aa0a6;
-      text-decoration: none;
-      cursor: pointer;
-    }
-    .switch-btn:hover { border-color: #27ae60; color: #27ae60; }
-    .switch-active {
-      font-size: 17px;
-      padding: 4px 10px;
-      border-radius: 4px;
-      border: 1px solid #4a9eff;
-      background: rgba(74,158,255,0.12);
-      color: #4a9eff;
-      font-weight: 600;
-    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
       <div class="fc-center">
-        <div class="fc-name">VorkathFC</div>
+        <div class="fc-name">SolakFC</div>
         <div class="fc-world" id="fc-world"></div>
       </div>
       <div class="stats">
@@ -193,8 +191,8 @@
       </div>
     </div>
     <div class="game-switch">
-      <span class="switch-active">🐉 Vorkath</span>
-      <a class="switch-btn" href="queuesolak.html">⚔️ Solak</a>
+      <a class="switch-btn" href="queue.html">🐉 Vorkath</a>
+      <span class="switch-active">⚔️ Solak</span>
     </div>
     <div class="queue-count" id="queue-count">Queue: 0</div>
     <div id="hero-area"></div>
@@ -214,7 +212,7 @@
 
     async function fetchQueue() {
       try {
-        var result = await sb.from('queue').select('name').order('joined_at');
+        var result = await sb.from('solak_queue').select('name').order('joined_at');
         if (result.error) throw result.error;
         var names = result.data ? result.data.map(function(r) { return r.name; }) : [];
         renderQueue(names);
@@ -226,7 +224,7 @@
 
     async function fetchWorld() {
       try {
-        var result = await sb.from('app_state').select('value').eq('key', 'world').single();
+        var result = await sb.from('solak_app_state').select('value').eq('key', 'world').single();
         if (result.error) throw result.error;
         var world = result.data.value || '';
         document.getElementById('fc-world').textContent = world ? 'World: ' + world : '';
@@ -235,7 +233,7 @@
 
     async function fetchStats() {
       try {
-        var result = await sb.from('app_state').select('key, value').in('key', ['total_kills', 'session_kills']);
+        var result = await sb.from('solak_app_state').select('key, value').in('key', ['total_kills', 'session_kills']);
         if (result.error) throw result.error;
         var total = '—';
         var today = '—';
@@ -284,13 +282,11 @@
     fetchStats();
     fetchWorld();
 
-    // Poll stats/world every 10s as fallback
     setInterval(function() { fetchStats(); fetchWorld(); }, 10000);
 
-    // Realtime subscriptions
-    sb.channel('queue-page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, function() { fetchQueue(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, function() { fetchStats(); fetchWorld(); })
+    sb.channel('solak-queue-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solak_queue' }, function() { fetchQueue(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solak_app_state' }, function() { fetchStats(); fetchWorld(); })
       .subscribe();
   </script>
 </body>
