@@ -1065,8 +1065,8 @@ function init() {
     calibrated = true;
     adminPass = pass;
     try {
-      localStorage.setItem('slk_adminPass', pass);
-      localStorage.setItem('slk_adminExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+      localStorage.setItem('vgt_adminPass', pass);
+      localStorage.setItem('vgt_adminExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
     } catch (e) {}
     var ab = document.getElementById('admin-btn');
     ab.textContent = 'Admin ✓';
@@ -1090,8 +1090,8 @@ function init() {
     adminPass = '';
     deactivateSuperAdmin();
     try {
-      localStorage.removeItem('slk_adminPass');
-      localStorage.removeItem('slk_adminExpiry');
+      localStorage.removeItem('vgt_adminPass');
+      localStorage.removeItem('vgt_adminExpiry');
     } catch (e) {}
     var ab = document.getElementById('admin-btn');
     ab.textContent = 'Admin';
@@ -1109,8 +1109,8 @@ function init() {
     superCalibrated = true;
     superAdminPass = pass;
     try {
-      localStorage.setItem('slk_superPass', pass);
-      localStorage.setItem('slk_superExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+      localStorage.setItem('vgt_superPass', pass);
+      localStorage.setItem('vgt_superExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
     } catch (e) {}
     var section = document.getElementById('ac-blacklist-section');
     if (section) section.style.display = '';
@@ -1126,8 +1126,8 @@ function init() {
     superCalibrated = false;
     superAdminPass = '';
     try {
-      localStorage.removeItem('slk_superPass');
-      localStorage.removeItem('slk_superExpiry');
+      localStorage.removeItem('vgt_superPass');
+      localStorage.removeItem('vgt_superExpiry');
     } catch (e) {}
     var section = document.getElementById('ac-blacklist-section');
     if (section) section.style.display = 'none';
@@ -1156,8 +1156,8 @@ function init() {
 
   // ── Auto-login from saved session ─────────────────────────────
   try {
-    var savedPass = localStorage.getItem('slk_adminPass');
-    var savedExpiry = localStorage.getItem('slk_adminExpiry');
+    var savedPass = localStorage.getItem('vgt_adminPass');
+    var savedExpiry = localStorage.getItem('vgt_adminExpiry');
     if (savedPass && savedExpiry && Date.now() < Number(savedExpiry)) {
       sb.rpc('check_admin', { pass: savedPass }).then(function(result) {
         if (result.data === true) {
@@ -1171,14 +1171,14 @@ function init() {
         }
       });
     } else {
-      localStorage.removeItem('slk_adminPass');
-      localStorage.removeItem('slk_adminExpiry');
+      localStorage.removeItem('vgt_adminPass');
+      localStorage.removeItem('vgt_adminExpiry');
     }
   } catch (e) {}
 
   try {
-    var savedSuperPass = localStorage.getItem('slk_superPass');
-    var savedSuperExpiry = localStorage.getItem('slk_superExpiry');
+    var savedSuperPass = localStorage.getItem('vgt_superPass');
+    var savedSuperExpiry = localStorage.getItem('vgt_superExpiry');
     if (savedSuperPass && savedSuperExpiry && Date.now() < Number(savedSuperExpiry)) {
       sb.rpc('check_super_admin', { pass: savedSuperPass }).then(function(result) {
         if (result.data === true) {
@@ -1190,8 +1190,8 @@ function init() {
         }
       });
     } else {
-      localStorage.removeItem('slk_superPass');
-      localStorage.removeItem('slk_superExpiry');
+      localStorage.removeItem('vgt_superPass');
+      localStorage.removeItem('vgt_superExpiry');
     }
   } catch (e) {}
 
