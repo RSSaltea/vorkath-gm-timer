@@ -1,6 +1,6 @@
 # Vorkath GM Timer
 
-An Alt1 Toolkit plugin for Vorkath Grandmaster carry sessions. It reads the carry queue from a shared Google Sheet and alerts you when you are in the top 3 or when it is your turn.
+An Alt1 Toolkit plugin for Vorkath Grandmaster carry sessions. It reads the carry queue from a database and alerts you when you are in the top 3 or when it is your turn.
 
 ## Installation
 
