@@ -1539,6 +1539,7 @@ function init() {
           if (result.error) throw result.error;
           var item = skipBtn.closest('.vgt-completed-side-item');
           if (item) item.remove();
+          onRealtimeChange();
         })
         .catch(function(err) {
           console.warn('[SLK] Uncomplete to skip failed:', err);
@@ -1627,6 +1628,7 @@ function init() {
         if (result.error) throw result.error;
         skippedData = skippedData.filter(function(n) { return n !== name; });
         renderSkippedPanel();
+        onRealtimeChange();
       } catch (err) {
         console.warn('[SLK] Unskip failed:', err);
         unskipBtn.disabled = false;
@@ -1645,6 +1647,7 @@ function init() {
         if (result.error) throw result.error;
         skippedData = skippedData.filter(function(n) { return n !== cName; });
         renderSkippedPanel();
+        onRealtimeChange();
       } catch (err) {
         console.warn('[SLK] Skip to complete failed:', err);
         completeBtn.disabled = false;

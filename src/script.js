@@ -1553,6 +1553,7 @@ function init() {
           if (result.error) throw result.error;
           var item = skipBtn.closest('.vgt-completed-side-item');
           if (item) item.remove();
+          onRealtimeChange();
         })
         .catch(function(err) {
           console.warn('[VGT] Uncomplete to skip failed:', err);
@@ -1643,6 +1644,7 @@ function init() {
         if (result.error) throw result.error;
         skippedData = skippedData.filter(function(n) { return n !== name; });
         renderSkippedPanel();
+        onRealtimeChange();
       } catch (err) {
         console.warn('[VGT] Unskip failed:', err);
         unskipBtn.disabled = false;
@@ -1662,6 +1664,7 @@ function init() {
         if (result.error) throw result.error;
         skippedData = skippedData.filter(function(n) { return n !== cName; });
         renderSkippedPanel();
+        onRealtimeChange();
       } catch (err) {
         console.warn('[VGT] Skip to complete failed:', err);
         completeBtn.disabled = false;
