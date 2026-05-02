@@ -1435,7 +1435,7 @@ function init() {
     sb.rpc('admin_reorder_queue', { pass: adminPass, player_name: movedName, new_position: targetIdx })
       .then(function(res) {
         if (res.error) { console.warn('[VGT] Reorder failed:', res.error); refresh(); }
-        else { onRealtimeChange(); }
+        // On success: optimistic update is already correct, realtime events will confirm
       })
       .catch(function(err) { console.warn('[VGT] Reorder failed:', err); refresh(); });
   });
