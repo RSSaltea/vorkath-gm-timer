@@ -1064,6 +1064,9 @@ function init() {
   // ── Realtime — instant updates from Supabase
   setupRealtime();
 
+  // ── Polling fallback — in case realtime events are missed (e.g. Alt1 environment)
+  setInterval(refresh, 10000);
+
   // ── Heartbeat — announce presence every 15 s
   sendHeartbeat();
   heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
