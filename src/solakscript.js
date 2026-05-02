@@ -1416,9 +1416,13 @@ function init() {
     queueData.splice(targetIdx, 0, movedName);
     updateQueueList(queueData);
 
+    // Cancel any pending refresh so it doesn't override the optimistic update
+    clearTimeout(realtimeDebounce);
+
     sb.rpc('solak_admin_reorder_queue', { pass: adminPass, player_name: movedName, new_position: targetIdx })
       .then(function(res) {
         if (res.error) { console.warn('[SLK] Reorder failed:', res.error); refresh(); }
+        else { onRealtimeChange(); }
       })
       .catch(function(err) { console.warn('[SLK] Reorder failed:', err); refresh(); });
   });
