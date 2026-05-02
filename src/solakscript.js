@@ -571,6 +571,7 @@ async function runAction(action, name, btnEl) {
       sessionKillCount++;
       updateSessionDisplay();
     }
+    onRealtimeChange();
   } catch (err) {
     console.warn('[SLK] Action failed:', err);
     btnEl.textContent = '!';

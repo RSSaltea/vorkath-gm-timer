@@ -573,6 +573,7 @@ async function runAction(action, name, btnEl) {
       sessionKillCount++;
       updateSessionDisplay();
     }
+    onRealtimeChange();
   } catch (err) {
     console.warn('[VGT] Action failed:', err);
     btnEl.textContent = '!';
