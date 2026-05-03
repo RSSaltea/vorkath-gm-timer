@@ -1171,6 +1171,37 @@ function init() {
     });
   }
 
+  // ── Manual add to completed ─────────────────────────────────────
+  var manualCompleteInput = document.getElementById('ac-manual-complete-input');
+  var manualCompleteBtn   = document.getElementById('ac-manual-complete-btn');
+  if (manualCompleteBtn) {
+    var doManualComplete = async function() {
+      if (!calibrated) return;
+      var name = manualCompleteInput ? manualCompleteInput.value.trim() : '';
+      if (!name) return;
+      manualCompleteBtn.disabled = true;
+      manualCompleteBtn.textContent = '...';
+      try {
+        var result = await sb.rpc('admin_add_to_completed', { pass: adminPass, player_name: name });
+        if (result.error) throw result.error;
+        if (manualCompleteInput) manualCompleteInput.value = '';
+        manualCompleteBtn.textContent = '✓ Done';
+        onRealtimeChange();
+        setTimeout(function() { manualCompleteBtn.textContent = 'Complete'; manualCompleteBtn.disabled = false; }, 2000);
+      } catch (err) {
+        console.warn('[VGT] Manual complete failed:', err);
+        manualCompleteBtn.textContent = '!';
+        manualCompleteBtn.disabled = false;
+      }
+    };
+    manualCompleteBtn.addEventListener('click', doManualComplete);
+    if (manualCompleteInput) {
+      manualCompleteInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') doManualComplete();
+      });
+    }
+  }
+
   // ── Auto-login from saved session ─────────────────────────────
   try {
     var savedPass = localStorage.getItem('vgt_adminPass');
