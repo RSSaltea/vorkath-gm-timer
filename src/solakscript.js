@@ -360,6 +360,7 @@ function updateQueueList(queue) {
   var countEl = document.getElementById('queue-count');
   if (countEl) countEl.textContent = queue ? queue.length : 0;
 
+  // Skip re-render if an inline name edit or drag is in progress
   if (isDragging || listEl.querySelector('.vgt-queue-name.editing')) return;
 
   if (!queue) {
@@ -943,12 +944,16 @@ async function joinQueue() {
     var result = await sb.rpc('solak_join_queue', { player_name: name });
     if (result.error) throw result.error;
     var data = result.data;
-    if (data.ok) {
+    if (data && data.ok) {
       btn.textContent = '✓ Joined queue!';
       lastSubmittedName = name;
       lastSubmitTime = Date.now();
-    } else if (data.error === 'duplicate') {
+    } else if (data && data.error === 'duplicate') {
       btn.textContent = 'Already in queue';
+    } else if (!data) {
+      btn.textContent = '✓ Joined queue!';
+      lastSubmittedName = name;
+      lastSubmitTime = Date.now();
     } else {
       btn.textContent = '✗ Failed — try again';
     }
@@ -1027,6 +1032,7 @@ function init() {
     });
   });
 
+  // Restore last active tab (default to 'info')
   var urlTab = new URLSearchParams(window.location.search).get('tab');
   var savedTab = urlTab || localStorage.getItem('slk_activeTab') || 'info';
   switchToTab(savedTab);
@@ -1177,8 +1183,8 @@ function init() {
             if (r.data === true) activateSuperAdmin(savedPass);
           });
         } else {
-          localStorage.removeItem('slk_adminPass');
-          localStorage.removeItem('slk_adminExpiry');
+          localStorage.removeItem('vgt_adminPass');
+          localStorage.removeItem('vgt_adminExpiry');
         }
       });
     } else {
@@ -1196,8 +1202,8 @@ function init() {
           if (!calibrated) activateAdmin(savedSuperPass);
           activateSuperAdmin(savedSuperPass);
         } else {
-          localStorage.removeItem('slk_superPass');
-          localStorage.removeItem('slk_superExpiry');
+          localStorage.removeItem('vgt_superPass');
+          localStorage.removeItem('vgt_superExpiry');
         }
       });
     } else {
@@ -1283,6 +1289,7 @@ function init() {
       return;
     }
 
+    // Inline name editing
     var nameEl = e.target.closest('.vgt-queue-name.editable');
     if (nameEl && !nameEl.classList.contains('editing')) {
       var original = nameEl.getAttribute('data-original');
@@ -1402,6 +1409,7 @@ function init() {
     var targetIdx = dragOverIndex;
     var srcIdx = dragSrcIndex;
 
+    // Clean up drag state
     isDragging = false;
     dragSrcIndex = -1;
     dragOverIndex = -1;
@@ -1438,7 +1446,7 @@ function init() {
     try {
       var result = await sb.rpc('solak_admin_toggle_submissions', { pass: adminPass });
       if (result.error) throw result.error;
-      submissionsOpen = result.data === 'true';
+      await fetchSubmissionsOpen();
       updateToggleOpenBtn();
       updateSubmissionsStatus();
     } catch (err) {
@@ -1556,6 +1564,7 @@ function init() {
       return;
     }
 
+    // Inline name editing
     var nameEl = e.target.closest('.vgt-completed-side-name');
     if (!nameEl || nameEl.classList.contains('editing')) return;
 
@@ -1625,6 +1634,7 @@ function init() {
   document.getElementById('skipped-list').addEventListener('click', async function(e) {
     if (!calibrated) return;
 
+    // Unskip → back to queue
     var unskipBtn = e.target.closest('.vgt-unskip-btn');
     if (unskipBtn && !unskipBtn.disabled) {
       var name = unskipBtn.getAttribute('data-name');
@@ -1644,6 +1654,7 @@ function init() {
       return;
     }
 
+    // Complete → move from skipped to completed
     var completeBtn = e.target.closest('.vgt-skip-complete-btn');
     if (completeBtn && !completeBtn.disabled) {
       var cName = completeBtn.getAttribute('data-name');
