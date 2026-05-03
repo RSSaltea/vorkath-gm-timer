@@ -1186,6 +1186,7 @@ function init() {
         if (result.error) throw result.error;
         if (manualCompleteInput) manualCompleteInput.value = '';
         manualCompleteBtn.textContent = '✓ Done';
+        fetchCompleted();
         onRealtimeChange();
         setTimeout(function() { manualCompleteBtn.textContent = 'Complete'; manualCompleteBtn.disabled = false; }, 2000);
       } catch (err) {
@@ -1200,6 +1201,30 @@ function init() {
         if (e.key === 'Enter') doManualComplete();
       });
     }
+  }
+
+  // ── Manual add to queue ─────────────────────────────────────────
+  var manualQueueBtn = document.getElementById('ac-manual-queue-btn');
+  if (manualQueueBtn) {
+    manualQueueBtn.addEventListener('click', async function() {
+      if (!calibrated) return;
+      var name = manualCompleteInput ? manualCompleteInput.value.trim() : '';
+      if (!name) return;
+      manualQueueBtn.disabled = true;
+      manualQueueBtn.textContent = '...';
+      try {
+        var result = await sb.rpc('admin_add_to_queue', { pass: adminPass, player_name: name });
+        if (result.error) throw result.error;
+        if (manualCompleteInput) manualCompleteInput.value = '';
+        manualQueueBtn.textContent = '✓ Done';
+        onRealtimeChange();
+        setTimeout(function() { manualQueueBtn.textContent = 'Add to Queue'; manualQueueBtn.disabled = false; }, 2000);
+      } catch (err) {
+        console.warn('[VGT] Manual queue add failed:', err);
+        manualQueueBtn.textContent = '!';
+        manualQueueBtn.disabled = false;
+      }
+    });
   }
 
   // ── Auto-login from saved session ─────────────────────────────
