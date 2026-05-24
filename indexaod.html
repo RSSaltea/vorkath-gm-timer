@@ -5,8 +5,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Solak Grandmaster Timer</title>
-  <link rel="icon" href="./src/icon2.png" type="image/png" />
+  <title>AoD Grandmaster Timer</title>
+  <link rel="icon" href="./src/icon1.png" type="image/png" />
 
   <script src="https://www.unpkg.com/alt1/dist/base/index.js"></script>
   <script src="https://www.unpkg.com/alt1/dist/ocr/index.js"></script>
@@ -19,11 +19,11 @@
   <link rel="stylesheet" href="./src/css/style.css?v=2.4" />
   <style>
     :root {
-      --accent:     #27ae60;
-      --accent-dim: rgba(39, 174, 96, 0.15);
+      --accent:     #e74c3c;
+      --accent-dim: rgba(231, 76, 60, 0.15);
     }
     .vgt-tab.active { color: #fff !important; }
-    .vgt-info-fc-name { color: #27ae60 !important; }
+    .vgt-info-fc-name { color: #e74c3c !important; }
     /* Game switch bar */
     .vgt-game-switch {
       display: flex;
@@ -42,14 +42,14 @@
       cursor: pointer;
       transition: border-color 0.15s, color 0.15s;
     }
-    .vgt-switch-btn:hover { border-color: #4a9eff; color: #4a9eff; }
+    .vgt-switch-btn:hover { border-color: #e74c3c; color: #e74c3c; }
     .vgt-switch-active {
       font-size: 11px;
       padding: 3px 8px;
       border-radius: 4px;
-      border: 1px solid #27ae60;
-      background: rgba(39,174,96,0.12);
-      color: #27ae60;
+      border: 1px solid #e74c3c;
+      background: rgba(231,76,60,0.12);
+      color: #e74c3c;
       font-weight: 600;
     }
   </style>
@@ -120,12 +120,12 @@
 
     <!-- Header -->
     <header class="vgt-header">
-      <div class="vgt-title">Solak GM Timer</div>
+      <div class="vgt-title">AoD GM Timer</div>
       <div class="vgt-header-right">
         <div class="vgt-game-switch">
           <a class="vgt-switch-btn" href="index.html">Vorkath</a>
-          <span class="vgt-switch-active">Solak</span>
-          <a class="vgt-switch-btn" href="indexaod.html">AoD</a>
+          <a class="vgt-switch-btn" href="indexsolak.html">Solak</a>
+          <span class="vgt-switch-active">AoD</span>
         </div>
         <div class="vgt-world" id="vgt-world"></div>
         <div class="vgt-status-dot" id="vgt-dot" title="Connection status"></div>
@@ -139,7 +139,7 @@
     <!-- Alt1 install banner (hidden in-app, shown in browser) -->
     <div class="vgt-alt1-banner" id="alt1-banner">
       <span>Not running in Alt1</span>
-      <a class="vgt-alt1-install-btn" href="alt1://addapp/https://rssaltea.github.io/vorkath-gm-timer/solakappconfig.json">Add to Alt1</a>
+      <a class="vgt-alt1-install-btn" href="alt1://addapp/https://rssaltea.github.io/vorkath-gm-timer/aodappconfig.json">Add to Alt1</a>
     </div>
 
     <!-- Tabs -->
@@ -214,7 +214,7 @@
         <div class="vgt-completed-body" id="completed-body" style="display:none;">
           <div class="vgt-completed-search-wrap">
             <input class="vgt-name-input" id="completed-search" type="text" placeholder="Search..." autocomplete="off" spellcheck="false" />
-            <a class="vgt-completed-fullview" href="completedsolak.html" target="_blank" title="View full list">&#x2197;</a>
+            <a class="vgt-completed-fullview" href="completedaod.html" target="_blank" title="View full list">&#x2197;</a>
             <div class="vgt-completed-suggestions" id="completed-suggestions"></div>
           </div>
           <div class="vgt-completed-list normalscroll" id="completed-list"></div>
@@ -244,14 +244,10 @@
       <div class="vgt-info-card">
         <div class="vgt-label">Tips</div>
         <ul class="vgt-info-list">
-          <li>Use Necromancy, do not use any other style please. The tier does not matter as long as you have Command Ghost.</li>
-          <li>Command Ghost active at all times!</li>
-          <li>Have Sign of Life for every attempt.</li>
-          <li>Use Resonance and Disruption Shield as you see Solak teleport to the middle for Arms + Legs.</li>
-          <li>Go to a green pad when they appear, the one furthest away. Password: Eruption</li>
-          <li>DO NOT PRESS THE EXTRA ACTION BUTTON EVER!</li>
-          <li>Use Smoke Cloud on Solak.</li>
-          <li>Go to the North East eruption and do damage to it.</li>
+          <li>Use Necromancy.</li>
+          <li>Stay near the middle pillar unless instructed otherwise.</li>
+          <li>DO NOT use the extra action button unless told to.</li>
+          <li>Follow the carry team's instructions at all times.</li>
           <li>We encourage you to keep the app (or website) open at all times.</li>
           <li>Join the instance of any carry team members usually:</li>
           <li class="vgt-info-circle"><span style="color:#ff9800">Saltea</span>, <span style="color:#ff9800">Glotzfrosch</span> or <span style="color:#ff9800">Czesc</span></li>
@@ -323,6 +319,6 @@
 
   </div>
 
-  <script src="./src/solakscript.js?v=2.2"></script>
+  <script src="./src/aodscript.js?v=1.0"></script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Solak GM — Completed</title>
+  <title>AoD GM — Completed</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -59,14 +59,14 @@
       text-decoration: none;
       cursor: pointer;
     }
-    .switch-btn:hover { border-color: #4a9eff; color: #4a9eff; }
+    .switch-btn:hover { border-color: #e74c3c; color: #e74c3c; }
     .switch-active {
       font-size: 11px;
       padding: 3px 8px;
       border-radius: 4px;
-      border: 1px solid #27ae60;
-      background: rgba(39,174,96,0.12);
-      color: #27ae60;
+      border: 1px solid #e74c3c;
+      background: rgba(231,76,60,0.12);
+      color: #e74c3c;
       font-weight: 600;
     }
     .search-wrap {
@@ -84,12 +84,8 @@
       font-family: inherit;
       outline: none;
     }
-    .search-input:focus {
-      border-color: #27ae60;
-    }
-    .search-input::placeholder {
-      color: #6e7380;
-    }
+    .search-input:focus { border-color: #e74c3c; }
+    .search-input::placeholder { color: #6e7380; }
     .list {
       display: flex;
       flex-direction: column;
@@ -109,35 +105,21 @@
       border-radius: 5px;
       font-size: 13px;
     }
-    .item-num {
-      color: #6e7380;
-      font-size: 11px;
-      min-width: 28px;
-    }
-    .item-name {
-      color: #dde1e7;
-    }
-    .loading {
-      text-align: center;
-      color: #6e7380;
-      padding: 20px;
-    }
-    .no-results {
-      text-align: center;
-      color: #6e7380;
-      padding: 12px;
-    }
+    .item-num { color: #6e7380; font-size: 11px; min-width: 28px; }
+    .item-name { color: #dde1e7; }
+    .loading { text-align: center; color: #6e7380; padding: 20px; }
+    .no-results { text-align: center; color: #6e7380; padding: 12px; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <div class="title">Solak GM — Completed Kills</div>
+      <div class="title">AoD GM — Completed Kills</div>
     </div>
     <div class="game-switch">
       <a class="switch-btn" href="completed.html">Vorkath</a>
-      <span class="switch-active">Solak</span>
-      <a class="switch-btn" href="completedaod.html">AoD</a>
+      <a class="switch-btn" href="completedsolak.html">Solak</a>
+      <span class="switch-active">AoD</span>
     </div>
     <div class="search-wrap">
       <input class="search-input" id="search" type="text" placeholder="Search names..." autocomplete="off" spellcheck="false" />
@@ -155,7 +137,7 @@
 
     async function fetchCompleted() {
       try {
-        var result = await sb.from('solak_completed').select('name').order('completed_at', { ascending: false });
+        var result = await sb.from('aod_completed').select('name').order('completed_at', { ascending: false });
         if (result.error) throw result.error;
         completedData = result.data ? result.data.map(function(r) { return r.name; }) : [];
         renderList('');
@@ -192,8 +174,8 @@
 
     fetchCompleted();
 
-    sb.channel('solak-completed-page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'solak_completed' }, function() { fetchCompleted(); })
+    sb.channel('aod-completed-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aod_completed' }, function() { fetchCompleted(); })
       .subscribe();
   </script>
 </body>

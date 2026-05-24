@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AoD GM — Queue</title>
+  <link rel="icon" href="./src/icon1.png" type="image/png" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0a0e;
+      color: #dde1e7;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 20px;
+      line-height: 1.4;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 289px;
+      min-height: 680px;
+      margin: 24px auto;
+      background: #0f0f14;
+      border: 1px solid #26263a;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #26263a;
+      margin-bottom: 12px;
+    }
+    .stats {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+    .stat { font-size: 25px; color: #9aa0a6; }
+    .fc-center { text-align: center; }
+    .fc-name {
+      font-size: 22px;
+      font-weight: 700;
+      color: #e74c3c;
+      letter-spacing: 0.5px;
+      text-shadow: 0 1px 8px rgba(231,76,60,0.35);
+    }
+    .fc-world { font-size: 25px; color: #9aa0a6; margin-top: 2px; }
+    /* Hero card for #1 */
+    .hero {
+      background: rgba(231, 76, 60, 0.12);
+      border: 1px solid #e74c3c;
+      border-radius: 5px;
+      padding: 10px 14px;
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hero-rank { font-size: 20px; color: #e74c3c; font-weight: 600; min-width: 26px; }
+    .hero-name { flex: 1; font-size: 23px; font-weight: 600; color: #dde1e7; }
+    .list { display: flex; flex-direction: column; gap: 3px; }
+    .item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #16161f;
+      border: 1px solid #1e1e2e;
+      border-radius: 5px;
+      font-size: 23px;
+    }
+    .item.top3 { border-color: #3d2800; background: #160e00; }
+    .item-rank { font-size: 20px; color: #6e7380; font-weight: 600; min-width: 26px; }
+    .item.top3 .item-rank { color: #ff9800; }
+    .item-name { flex: 1; color: #dde1e7; }
+    .badge {
+      font-size: 17px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge.soon { background: rgba(255,152,0,0.15); color: #ff9800; }
+    .fc-footer {
+      font-size: 22px;
+      font-weight: 700;
+      color: #e74c3c;
+      letter-spacing: 0.5px;
+      text-shadow: 0 1px 8px rgba(231,76,60,0.35);
+      text-align: center;
+      padding: 10px 0 4px;
+    }
+    .queue-count { font-size: 17px; color: #9aa0a6; padding: 2px 0 6px; text-align: center; }
+    .loading { text-align: center; color: #6e7380; padding: 20px; }
+    .empty { text-align: center; color: #6e7380; padding: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="fc-center">
+        <div class="fc-name">VorkathFC</div>
+        <div class="fc-world" id="fc-world"></div>
+      </div>
+      <div class="stats">
+        <span class="stat" id="stat-total">Total: —</span>
+        <span class="stat" id="stat-today">Today: —</span>
+      </div>
+    </div>
+    <div class="queue-count" id="queue-count">Queue: 0</div>
+    <div id="hero-area"></div>
+    <div class="list" id="list">
+      <div class="loading">Loading queue...</div>
+    </div>
+    <div class="fc-footer">!AoDGM</div>
+  </div>
+  <script>
+    var SUPABASE_URL = 'https://gogwmrnsofnqkjjxyskt.supabase.co';
+    var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvZ3dtcm5zb2ZucWtqanh5c2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNjE1OTcsImV4cCI6MjA4NzkzNzU5N30.Pw__3qey7A9dV2hjzei-9VNUY4Jc7unVFUGgU-3nTdk';
+    var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    async function fetchQueue() {
+      try {
+        var result = await sb.from('aod_queue').select('name').order('joined_at');
+        if (result.error) throw result.error;
+        var names = result.data ? result.data.map(function(r) { return r.name; }) : [];
+        renderQueue(names);
+      } catch (err) {
+        document.getElementById('hero-area').innerHTML = '';
+        document.getElementById('list').innerHTML = '<div class="loading">Failed to load.</div>';
+      }
+    }
+
+    async function fetchWorld() {
+      try {
+        var result = await sb.from('aod_app_state').select('value').eq('key', 'world').single();
+        if (result.error) throw result.error;
+        var world = result.data.value || '';
+        document.getElementById('fc-world').textContent = world ? 'World: ' + world : '';
+      } catch (err) {}
+    }
+
+    async function fetchStats() {
+      try {
+        var result = await sb.from('aod_app_state').select('key, value').in('key', ['total_kills', 'session_kills']);
+        if (result.error) throw result.error;
+        var total = '—';
+        var today = '—';
+        for (var i = 0; i < result.data.length; i++) {
+          if (result.data[i].key === 'total_kills') total = result.data[i].value || '—';
+          if (result.data[i].key === 'session_kills') today = result.data[i].value || '—';
+        }
+        document.getElementById('stat-total').textContent = 'Total: ' + total;
+        document.getElementById('stat-today').textContent = 'Today: ' + today;
+      } catch (err) {}
+    }
+
+    function renderQueue(names) {
+      var heroEl = document.getElementById('hero-area');
+      var listEl = document.getElementById('list');
+      document.getElementById('queue-count').textContent = 'Queue: ' + names.length;
+
+      if (names.length === 0) {
+        heroEl.innerHTML = '';
+        listEl.innerHTML = '<div class="empty">The queue is empty.</div>';
+        return;
+      }
+
+      heroEl.innerHTML =
+        '<div class="hero">' +
+          '<span class="hero-rank">#1</span>' +
+          '<span class="hero-name">' + escapeHtml(names[0]) + '</span>' +
+        '</div>';
+
+      var top = Math.min(names.length, 5);
+      if (top <= 1) { listEl.innerHTML = ''; return; }
+      var html = '';
+      for (var i = 1; i < top; i++) {
+        var rank = i + 1;
+        var cls = 'item';
+        if (rank <= 3) cls += ' top3';
+        html += '<div class="' + cls + '"><span class="item-rank">#' + rank + '</span><span class="item-name">' + escapeHtml(names[i]) + '</span></div>';
+      }
+      listEl.innerHTML = html;
+    }
+
+    fetchQueue();
+    fetchStats();
+    fetchWorld();
+
+    setInterval(function() { fetchStats(); fetchWorld(); }, 10000);
+
+    sb.channel('aod-queue-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aod_queue' }, function() { fetchQueue(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aod_app_state' }, function() { fetchStats(); fetchWorld(); })
+      .subscribe();
+  </script>
+</body>
+</html>
