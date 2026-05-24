@@ -353,13 +353,21 @@
   </script>
   <script>
     (function() {
-      sb.from('aod_app_state').select('value').eq('key', 'section_hidden').single()
-        .then(function(result) {
-          if (result.data && result.data.value === 'true') {
-            var link = document.getElementById('aod-dropdown-link');
-            if (link) link.style.display = 'none';
-          }
-        });
+      var isAdmin = false;
+      try {
+        var p = localStorage.getItem('vgt_adminPass');
+        var e = parseInt(localStorage.getItem('vgt_adminExpiry'), 10);
+        if (p && e && Date.now() < e) isAdmin = true;
+      } catch(x) {}
+      if (!isAdmin) {
+        sb.from('aod_app_state').select('value').eq('key', 'section_hidden').single()
+          .then(function(result) {
+            if (result.data && result.data.value === 'true') {
+              var link = document.getElementById('aod-dropdown-link');
+              if (link) link.style.display = 'none';
+            }
+          });
+      }
     })();
   </script>
 </body>
