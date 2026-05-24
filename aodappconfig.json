@@ -4,7 +4,7 @@
   "appUrl": "./indexaod.html",
   "version": "1.0.0",
   "configUrl": "./aodappconfig.json",
-  "iconUrl": "./src/icon1.png",
+  "iconUrl": "./src/icon3.png",
   "defaultWidth": 300,
   "defaultHeight": 460,
   "minWidth": 240,
