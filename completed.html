@@ -105,32 +105,45 @@
       color: #6e7380;
       padding: 12px;
     }
-    .game-switch {
+    .game-switch { position: relative; margin-bottom: 10px; display: inline-block; }
+    .vgt-hamburger {
       display: flex;
+      flex-direction: column;
+      justify-content: center;
       gap: 4px;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .switch-btn {
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      border: 1px solid #26263a;
+      width: 28px;
+      height: 28px;
       background: #16161f;
+      border: 1px solid #26263a;
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 5px 6px;
+    }
+    .vgt-hamburger span { display: block; height: 2px; background: #9aa0a6; border-radius: 1px; transition: background 0.15s; }
+    .vgt-hamburger:hover span { background: #4a9eff; }
+    .vgt-game-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      background: #16161f;
+      border: 1px solid #26263a;
+      border-radius: 6px;
+      overflow: hidden;
+      z-index: 200;
+      min-width: 90px;
+    }
+    .vgt-game-dropdown.open { display: block; }
+    .vgt-dropdown-item {
+      display: block;
+      padding: 7px 14px;
+      font-size: 12px;
       color: #9aa0a6;
       text-decoration: none;
-      cursor: pointer;
+      white-space: nowrap;
     }
-    .switch-btn:hover { border-color: #27ae60; color: #27ae60; }
-    .switch-active {
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      border: 1px solid #4a9eff;
-      background: rgba(74,158,255,0.12);
-      color: #4a9eff;
-      font-weight: 600;
-    }
+    .vgt-dropdown-item:hover { background: #1e1e2a; color: #dde1e7; }
+    .vgt-dropdown-item.active { color: #4a9eff; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -139,9 +152,14 @@
       <div class="title">Vorkath GM — Completed Kills</div>
     </div>
     <div class="game-switch">
-      <span class="switch-active">Vorkath</span>
-      <a class="switch-btn" href="completedsolak.html">Solak</a>
-      <a class="switch-btn" href="completedaod.html">AoD</a>
+      <button class="vgt-hamburger" id="vgt-hamburger" aria-label="Switch game">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="vgt-game-dropdown" id="vgt-game-dropdown">
+        <a class="vgt-dropdown-item active" href="completed.html">Vorkath</a>
+        <a class="vgt-dropdown-item" href="completedsolak.html">Solak</a>
+        <a class="vgt-dropdown-item" href="completedaod.html">AoD</a>
+      </div>
     </div>
     <div class="search-wrap">
       <input class="search-input" id="search" type="text" placeholder="Search names..." autocomplete="off" spellcheck="false" />
@@ -200,6 +218,15 @@
     sb.channel('completed-page')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'completed' }, function() { fetchCompleted(); })
       .subscribe();
+
+    (function() {
+      var btn = document.getElementById('vgt-hamburger');
+      var dd = document.getElementById('vgt-game-dropdown');
+      if (btn && dd) {
+        btn.addEventListener('click', function(e) { e.stopPropagation(); dd.classList.toggle('open'); });
+        document.addEventListener('click', function() { dd.classList.remove('open'); });
+      }
+    })();
   </script>
 </body>
 </html>

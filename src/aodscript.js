@@ -994,8 +994,10 @@ function init() {
 
   // ── Tab switching
   function updateSwitchBtnTab(tabName) {
-    var btn = document.querySelector('.vgt-switch-btn');
-    if (btn) btn.href = 'index.html?tab=' + tabName;
+    document.querySelectorAll('.vgt-game-dropdown a').forEach(function(a) {
+      var base = a.getAttribute('href').split('?')[0];
+      a.setAttribute('href', base + '?tab=' + tabName);
+    });
   }
 
   function switchToTab(tabName) {

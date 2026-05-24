@@ -994,8 +994,10 @@ function init() {
 
   // ── Tab switching
   function updateSwitchBtnTab(tabName) {
-    var btn = document.querySelector('.vgt-switch-btn');
-    if (btn) btn.href = 'indexsolak.html?tab=' + tabName;
+    document.querySelectorAll('.vgt-game-dropdown a').forEach(function(a) {
+      var base = a.getAttribute('href').split('?')[0];
+      a.setAttribute('href', base + '?tab=' + tabName);
+    });
   }
 
   function switchToTab(tabName) {
@@ -1566,9 +1568,11 @@ function init() {
       var result = await sb.rpc('admin_session_end', { pass: adminPass });
       if (result.error) throw result.error;
       sessionActive = false;
+      sessionKillCount = 0;
       updateSessionDisplay();
     } catch (err) {
       console.warn('[VGT] Session end failed:', err);
+      alert('Session end failed: ' + (err.message || JSON.stringify(err)));
     }
     this.disabled = false;
   });

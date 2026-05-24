@@ -25,33 +25,45 @@
     .vgt-tab.active { color: #fff !important; }
     .vgt-info-fc-name { color: #27ae60 !important; }
     /* Game switch bar */
-    .vgt-game-switch {
+    .vgt-game-switch { position: relative; margin: 0 6px 0 0; }
+    .vgt-hamburger {
       display: flex;
+      flex-direction: column;
+      justify-content: center;
       gap: 4px;
-      align-items: center;
-      margin: 0 6px 0 0;
-    }
-    .vgt-switch-btn {
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      border: 1px solid #26263a;
+      width: 28px;
+      height: 28px;
       background: #16161f;
+      border: 1px solid #26263a;
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 5px 6px;
+    }
+    .vgt-hamburger span { display: block; height: 2px; background: #9aa0a6; border-radius: 1px; transition: background 0.15s; }
+    .vgt-hamburger:hover span { background: #27ae60; }
+    .vgt-game-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      background: #16161f;
+      border: 1px solid #26263a;
+      border-radius: 6px;
+      overflow: hidden;
+      z-index: 200;
+      min-width: 90px;
+    }
+    .vgt-game-dropdown.open { display: block; }
+    .vgt-dropdown-item {
+      display: block;
+      padding: 7px 14px;
+      font-size: 12px;
       color: #9aa0a6;
       text-decoration: none;
-      cursor: pointer;
-      transition: border-color 0.15s, color 0.15s;
+      white-space: nowrap;
     }
-    .vgt-switch-btn:hover { border-color: #4a9eff; color: #4a9eff; }
-    .vgt-switch-active {
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      border: 1px solid #27ae60;
-      background: rgba(39,174,96,0.12);
-      color: #27ae60;
-      font-weight: 600;
-    }
+    .vgt-dropdown-item:hover { background: #1e1e2a; color: #dde1e7; }
+    .vgt-dropdown-item.active { color: #27ae60; font-weight: 600; }
   </style>
 </head>
 <body class="nis">
@@ -123,9 +135,14 @@
       <div class="vgt-title">Solak GM Timer</div>
       <div class="vgt-header-right">
         <div class="vgt-game-switch">
-          <a class="vgt-switch-btn" href="index.html">Vorkath</a>
-          <span class="vgt-switch-active">Solak</span>
-          <a class="vgt-switch-btn" href="indexaod.html">AoD</a>
+          <button class="vgt-hamburger" id="vgt-hamburger" aria-label="Switch game">
+            <span></span><span></span><span></span>
+          </button>
+          <div class="vgt-game-dropdown" id="vgt-game-dropdown">
+            <a class="vgt-dropdown-item" href="index.html">Vorkath</a>
+            <a class="vgt-dropdown-item active" href="indexsolak.html">Solak</a>
+            <a class="vgt-dropdown-item" href="indexaod.html">AoD</a>
+          </div>
         </div>
         <div class="vgt-world" id="vgt-world"></div>
         <div class="vgt-status-dot" id="vgt-dot" title="Connection status"></div>
@@ -324,5 +341,15 @@
   </div>
 
   <script src="./src/solakscript.js?v=2.2"></script>
+  <script>
+    (function() {
+      var btn = document.getElementById('vgt-hamburger');
+      var dd = document.getElementById('vgt-game-dropdown');
+      if (btn && dd) {
+        btn.addEventListener('click', function(e) { e.stopPropagation(); dd.classList.toggle('open'); });
+        document.addEventListener('click', function() { dd.classList.remove('open'); });
+      }
+    })();
+  </script>
 </body>
 </html>
