@@ -108,6 +108,13 @@
       <button class="vgt-ac-btn toggle" id="ac-manual-queue-btn" style="margin-top:4px;width:100%;">Add to Queue</button>
     </div>
 
+    <div class="vgt-ac-section">
+      <div class="vgt-ac-label">Section Visibility</div>
+      <div class="vgt-ac-desc">Hide AoD from non-admins</div>
+      <div class="vgt-ac-status open" id="ac-hidden-status">Visible</div>
+      <button class="vgt-ac-btn toggle" id="ac-toggle-hidden" style="margin-top:4px;width:100%;">Hide Section</button>
+    </div>
+
     <div class="vgt-ac-section" id="ac-blacklist-section" style="display:none;">
       <div class="vgt-ac-label">Blacklist</div>
       <div class="vgt-ac-desc">Banned players cannot sign up</div>
@@ -338,7 +345,10 @@
 
   </div>
 
-  <script src="./src/aodscript.js?v=1.0"></script>
+  <!-- Shown to non-admins when section is hidden -->
+  <div id="aod-hidden-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0d0d14;z-index:9999;"></div>
+
+  <script src="./src/aodscript.js?v=1.1"></script>
   <script>
     (function() {
       var btn = document.getElementById('vgt-hamburger');

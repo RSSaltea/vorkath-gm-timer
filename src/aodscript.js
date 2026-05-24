@@ -43,6 +43,7 @@ var chatMessages = [];
 var dragSrcIndex = -1;
 var dragOverIndex = -1;
 var isDragging = false;
+var aodHidden = false;
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -212,6 +213,39 @@ async function fetchSessionState() {
   } catch (err) {
     console.warn('[AOD] Session state fetch failed:', err);
   }
+}
+
+async function fetchHiddenState() {
+  try {
+    var result = await sb.from('aod_app_state').select('value').eq('key', 'section_hidden').single();
+    if (result.error) throw result.error;
+    aodHidden = result.data.value === 'true';
+    updateHiddenBtn();
+    applyHiddenState();
+  } catch (err) {
+    console.warn('[AOD] Failed to fetch hidden state:', err);
+  }
+}
+
+function updateHiddenBtn() {
+  var statusEl = document.getElementById('ac-hidden-status');
+  var toggleBtn = document.getElementById('ac-toggle-hidden');
+  if (!statusEl || !toggleBtn) return;
+  if (aodHidden) {
+    statusEl.textContent = 'Hidden';
+    statusEl.className = 'vgt-ac-status closed';
+    toggleBtn.textContent = 'Show Section';
+  } else {
+    statusEl.textContent = 'Visible';
+    statusEl.className = 'vgt-ac-status open';
+    toggleBtn.textContent = 'Hide Section';
+  }
+}
+
+function applyHiddenState() {
+  var overlay = document.getElementById('aod-hidden-overlay');
+  if (!overlay) return;
+  overlay.style.display = (aodHidden && !calibrated) ? 'block' : 'none';
 }
 
 async function fetchSkipped() {
@@ -595,7 +629,7 @@ function isOnline(name) {
 async function refresh() {
   setDot('loading');
 
-  var fetches = [fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats(), fetchInfoCode(), fetchBlacklist()];
+  var fetches = [fetchQueue(), fetchSubmissionsOpen(), fetchHeartbeats(), fetchWorld(), fetchPings(), fetchStats(), fetchInfoCode(), fetchBlacklist(), fetchHiddenState()];
   if (calibrated) {
     fetches.push(fetchSessionState());
     fetches.push(fetchSkipped());
@@ -1101,6 +1135,7 @@ function init() {
     updateToggleOpenBtn();
     var qtc = document.getElementById('queue-total-carries');
     if (qtc) qtc.style.display = '';
+    applyHiddenState();
   }
 
   function deactivateAdmin() {
@@ -1114,6 +1149,7 @@ function init() {
     var ab = document.getElementById('admin-btn');
     ab.textContent = 'Admin';
     ab.classList.remove('active');
+    applyHiddenState();
     toggleAdminControlsPanel(false);
     toggleSkippedPanel(false);
     toggleCompletedSidePanel(false);
@@ -1225,6 +1261,25 @@ function init() {
         manualQueueBtn.textContent = '!';
         manualQueueBtn.disabled = false;
       }
+    });
+  }
+
+  // ── Toggle hidden state ─────────────────────────────────────────
+  var toggleHiddenBtn = document.getElementById('ac-toggle-hidden');
+  if (toggleHiddenBtn) {
+    toggleHiddenBtn.addEventListener('click', async function() {
+      if (!calibrated) return;
+      var btn = this;
+      btn.disabled = true;
+      try {
+        var result = await sb.rpc('aod_admin_toggle_hidden', { pass: adminPass });
+        if (result.error) throw result.error;
+        aodHidden = result.data === 'true';
+        updateHiddenBtn();
+      } catch (err) {
+        console.warn('[AOD] Toggle hidden failed:', err);
+      }
+      btn.disabled = false;
     });
   }
 
