@@ -1268,9 +1268,15 @@ function init() {
   var toggleHiddenBtn = document.getElementById('ac-toggle-hidden');
   if (toggleHiddenBtn) {
     toggleHiddenBtn.addEventListener('click', async function() {
-      if (!calibrated) return;
+      if (!calibrated) {
+        this.textContent = 'Not admin!';
+        var self = this;
+        setTimeout(function() { updateHiddenBtn(); }, 1500);
+        return;
+      }
       var btn = this;
       btn.disabled = true;
+      btn.textContent = '...';
       try {
         var result = await sb.rpc('aod_admin_toggle_hidden', { pass: adminPass });
         if (result.error) throw result.error;
@@ -1278,6 +1284,9 @@ function init() {
         updateHiddenBtn();
       } catch (err) {
         console.warn('[AOD] Toggle hidden failed:', err);
+        btn.textContent = 'Error: ' + (err.message || err.code || 'unknown');
+        setTimeout(function() { updateHiddenBtn(); btn.disabled = false; }, 3000);
+        return;
       }
       btn.disabled = false;
     });
