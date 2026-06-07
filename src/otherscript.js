@@ -910,6 +910,7 @@ function init() {
   fetchCompleted();
   setupRealtime();
   setInterval(refresh, 10000);
+  setInterval(fetchCompleted, 10000);
   sendHeartbeat();
   heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
 
@@ -1109,6 +1110,7 @@ function init() {
       });
       if (result.error) throw result.error;
       if (doneAchs.length > 0 && sessionActive) { sessionKillCount += doneAchs.length; updateSessionDisplay(); }
+      if (result.data === 'completed') fetchCompleted();
       onRealtimeChange();
       if (completePendingBtn) { completePendingBtn.textContent = '✓'; completePendingBtn.disabled = false; }
     } catch(err) {
