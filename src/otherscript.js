@@ -664,7 +664,7 @@ async function sendChatMessage() {
   var btn = document.getElementById('chat-send-btn');
   btn.disabled = true; input.disabled = true;
   try {
-    var result = await sb.rpc('send_admin_chat', { pass: adminPass, msg: msg, sender_name: sender });
+    var result = await sb.rpc('other_send_admin_chat', { pass: adminPass, msg: msg, sender_name: sender });
     if (result.error) throw result.error;
     input.value = '';
   } catch (err) { console.warn('[OTHER] sendChatMessage failed:', err); }
@@ -710,7 +710,7 @@ async function runAction(action, rsn, btnEl) {
     if (action === 'adminSkip') {
       result = await sb.rpc('other_admin_skip', { pass: adminPass, p_rsn: rsn });
     } else if (action === 'ping') {
-      result = await sb.rpc('admin_ping', { pass: adminPass, target: rsn });
+      result = await sb.rpc('other_admin_ping', { pass: adminPass, target: rsn });
     }
     if (result.error) throw result.error;
     btnEl.textContent = '✓';
