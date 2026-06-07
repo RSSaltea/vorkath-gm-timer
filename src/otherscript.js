@@ -800,7 +800,7 @@ function setupRealtime() {
   sb.channel('oth-realtime')
     .on('postgres_changes',{event:'*',schema:'public',table:'other_queue'},onRealtimeChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'other_app_state'},onRealtimeChange)
-    .on('postgres_changes',{event:'*',schema:'public',table:'other_skipped'},onRealtimeChange)
+    .on('postgres_changes',{event:'*',schema:'public',table:'other_skipped'},function() { fetchCompleted(); onRealtimeChange(); })
     .on('postgres_changes',{event:'*',schema:'public',table:'blacklist'},function() { fetchBlacklist(); })
     .on('postgres_changes',{event:'*',schema:'public',table:'other_completed'},function() { fetchCompleted(); onRealtimeChange(); })
     .on('postgres_changes',{event:'*',schema:'public',table:'pings'},function() { fetchPings(); })
@@ -1282,7 +1282,7 @@ function init() {
         .then(function(res) {
           if(res.error) throw res.error;
           var item=skipBtn.closest('.vgt-completed-side-item'); if(item) item.remove();
-          onRealtimeChange();
+          fetchCompleted(); onRealtimeChange();
         }).catch(function(err){console.warn('[OTHER] uncomplete failed:',err);skipBtn.disabled=false;skipBtn.textContent='✗';});
       return;
     }
@@ -1336,7 +1336,7 @@ function init() {
         var r2=await sb.rpc('other_admin_skip_to_complete',{pass:adminPass,p_rsn:cRsn});
         if(r2.error) throw r2.error;
         skippedData=skippedData.filter(function(item){return item.rsn!==cRsn;});
-        renderSkippedPanel(); onRealtimeChange();
+        renderSkippedPanel(); fetchCompleted(); onRealtimeChange();
       } catch(err){console.warn('[OTHER] skip to complete failed:',err);complBtn.disabled=false;complBtn.textContent='Complete';}
     }
   });
