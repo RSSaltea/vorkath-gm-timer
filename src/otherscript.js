@@ -1205,17 +1205,20 @@ function init() {
   });
 
   // Admin controls buttons
-  document.getElementById('ac-toggle-submissions').addEventListener('click',async function() {
-    if(!calibrated) return; var btn=this; var prev=btn.textContent; btn.disabled=true; btn.textContent='...';
+  document.getElementById('ac-toggle-submissions').addEventListener('click', async function() {
+    if (!calibrated) return;
+    var btn = this;
+    btn.disabled = true;
     try {
-      var r=await sb.rpc('other_admin_toggle_submissions',{pass:adminPass});
-      if(r.error) throw r.error;
-      await fetchSubmissionsOpen(); updateToggleOpenBtn(); updateSubmissionsStatus();
-    } catch(err){
-      console.warn('[OTHER] toggle submissions failed:',err);
-      btn.textContent='Error'; setTimeout(function(){ btn.textContent=prev; btn.disabled=false; },2000); return;
+      var result = await sb.rpc('other_admin_toggle_submissions', { pass: adminPass });
+      if (result.error) throw result.error;
+      submissionsOpen = result.data === 'true';
+      updateToggleOpenBtn();
+      updateSubmissionsStatus();
+    } catch (err) {
+      console.warn('[OTHER] Failed to toggle submissions:', err);
     }
-    btn.disabled=false;
+    btn.disabled = false;
   });
 
   document.getElementById('ac-session-start').addEventListener('click',async function() {
