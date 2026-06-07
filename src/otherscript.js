@@ -456,10 +456,10 @@ function renderCompletedSidePanel(filter) {
         ci.achievements.map(function(a) { return '<span class="oth-ach-tag">' + escapeHtml(a) + '</span>'; }).join('') +
         '</div>';
     }
-    html += '<div class="vgt-completed-side-item" style="flex-wrap:wrap;">' +
+    html += '<div class="vgt-completed-side-item" style="flex-wrap:wrap;gap:2px;">' +
       '<span class="vgt-completed-side-name" data-original="' + escapeHtml(ci.rsn) + '">' + escapeHtml(ci.rsn) + '</span>' +
       '<button class="vgt-completed-side-skip" data-rsn="' + escapeHtml(ci.rsn) + '" title="Move to skipped">✗</button>' +
-      achTags +
+      (achTags ? '<div style="flex-basis:100%;padding-top:2px;">' + achTags + '</div>' : '') +
       '</div>';
   }
   listEl.innerHTML = html;
@@ -474,15 +474,25 @@ function renderSkippedPanel() {
   var html = '';
   for (var i = 0; i < skippedData.length; i++) {
     var item = skippedData[i];
-    var achText = item.achievements && item.achievements.length > 0 ? item.achievements.join(', ') : '';
-    html += '<div class="vgt-skipped-item">' +
+    var achTags = '';
+    if (item.achievements && item.achievements.length > 0) {
+      achTags = '<div class="oth-queue-tags" style="margin-top:4px;">' +
+        item.achievements.map(function(a) { return '<span class="oth-ach-tag">' + escapeHtml(a) + '</span>'; }).join('') +
+        '</div>';
+    }
+    var discordLine = item.discord_name
+      ? '<div style="font-size:11px;color:#9aa0a6;margin-top:1px;">' + escapeHtml(item.discord_name) + '</div>'
+      : '';
+    html += '<div class="vgt-skipped-item" style="flex-wrap:wrap;gap:4px;">' +
       '<div style="flex:1;min-width:0;">' +
         '<span class="vgt-skipped-name">' + escapeHtml(item.rsn) + '</span>' +
-        (item.discord_name ? '<div style="font-size:10px;color:#9aa0a6;margin-top:2px;">' + escapeHtml(item.discord_name) + '</div>' : '') +
-        (achText ? '<div style="font-size:10px;color:#e8a800;margin-top:2px;">' + escapeHtml(achText) + '</div>' : '') +
+        discordLine +
       '</div>' +
-      '<button class="vgt-unskip-btn" data-rsn="' + escapeHtml(item.rsn) + '">Unskip</button>' +
-      '<button class="vgt-skip-complete-btn" data-rsn="' + escapeHtml(item.rsn) + '">Complete</button>' +
+      '<div style="display:flex;gap:4px;align-items:center;">' +
+        '<button class="vgt-unskip-btn" data-rsn="' + escapeHtml(item.rsn) + '">Unskip</button>' +
+        '<button class="vgt-skip-complete-btn" data-rsn="' + escapeHtml(item.rsn) + '">Complete</button>' +
+      '</div>' +
+      (achTags ? '<div style="flex-basis:100%;">' + achTags + '</div>' : '') +
       '</div>';
   }
   listEl.innerHTML = html;
