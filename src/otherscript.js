@@ -344,8 +344,6 @@ function updateQueueList(queue) {
     if (isYou)   cls += ' is-you';
 
     var badge = '';
-    if (rank === 1) badge = '<span class="vgt-badge turn">NOW</span>';
-    else if (rank <= 3) badge = '<span class="vgt-badge soon">SOON</span>';
 
     var youTag = isYou ? '<span class="you-tag">YOU</span>' : '';
     var online = isOnline(item.rsn);
@@ -365,9 +363,9 @@ function updateQueueList(queue) {
 
     var metaLine = '';
     var metaParts = [];
-    if (item.discord_name) metaParts.push(escapeHtml(item.discord_name));
-    if (item.start_time) metaParts.push(escapeHtml(item.start_time) + ' – ' + escapeHtml(item.end_time));
-    if (metaParts.length) metaLine = '<div class="oth-queue-meta">' + metaParts.join(' | ') + '</div>';
+    if (item.discord_name) metaParts.push('<span style="color:#6b7280;">Discord:</span> ' + escapeHtml(item.discord_name));
+    if (item.start_time) metaParts.push('<span style="color:#6b7280;">Time:</span> ' + escapeHtml(item.start_time) + ' – ' + escapeHtml(item.end_time));
+    if (metaParts.length) metaLine = '<div class="oth-queue-meta">' + metaParts.join(' &nbsp;·&nbsp; ') + '</div>';
 
     var tagsLine = '';
     if (item.achievements && item.achievements.length > 0) {
