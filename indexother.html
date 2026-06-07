@@ -114,7 +114,7 @@
           <div class="vgt-game-dropdown" id="vgt-game-dropdown">
             <a class="vgt-dropdown-item" href="index.html">Vorkath</a>
             <a class="vgt-dropdown-item" href="indexsolak.html">Solak</a>
-            <a class="vgt-dropdown-item" href="indexaod.html">AoD</a>
+            <a class="vgt-dropdown-item" href="indexaod.html" id="aod-dropdown-link">AoD</a>
             <a class="vgt-dropdown-item active" href="indexother.html">Other</a>
           </div>
         </div>
@@ -308,6 +308,23 @@
     if (btn && dd) {
       btn.addEventListener('click', function(e) { e.stopPropagation(); dd.classList.toggle('open'); });
       document.addEventListener('click', function() { dd.classList.remove('open'); });
+    }
+  })();
+  (function() {
+    var isAdmin = false;
+    try {
+      var p = localStorage.getItem('vgt_adminPass');
+      var e = parseInt(localStorage.getItem('vgt_adminExpiry'), 10);
+      if (p && e && Date.now() < e) isAdmin = true;
+    } catch(x) {}
+    if (!isAdmin) {
+      sb.from('aod_app_state').select('value').eq('key', 'section_hidden').single()
+        .then(function(result) {
+          if (result.data && result.data.value === 'true') {
+            var link = document.getElementById('aod-dropdown-link');
+            if (link) link.style.display = 'none';
+          }
+        });
     }
   })();
 </script>
