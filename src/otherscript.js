@@ -1108,7 +1108,7 @@ function init() {
         done_achievements: doneAchs, increment_session: sessionActive
       });
       if (result.error) throw result.error;
-      if (result.data === 'completed' && sessionActive) { sessionKillCount++; updateSessionDisplay(); }
+      if (doneAchs.length > 0 && sessionActive) { sessionKillCount += doneAchs.length; updateSessionDisplay(); }
       onRealtimeChange();
       if (completePendingBtn) { completePendingBtn.textContent = '✓'; completePendingBtn.disabled = false; }
     } catch(err) {
@@ -1206,12 +1206,15 @@ function init() {
 
   // Admin controls buttons
   document.getElementById('ac-toggle-submissions').addEventListener('click',async function() {
-    if(!calibrated) return; var btn=this; btn.disabled=true;
+    if(!calibrated) return; var btn=this; var prev=btn.textContent; btn.disabled=true; btn.textContent='...';
     try {
       var r=await sb.rpc('other_admin_toggle_submissions',{pass:adminPass});
       if(r.error) throw r.error;
       await fetchSubmissionsOpen(); updateToggleOpenBtn(); updateSubmissionsStatus();
-    } catch(err){console.warn('[OTHER] toggle submissions failed:',err);}
+    } catch(err){
+      console.warn('[OTHER] toggle submissions failed:',err);
+      btn.textContent='Error'; setTimeout(function(){ btn.textContent=prev; btn.disabled=false; },2000); return;
+    }
     btn.disabled=false;
   });
 
