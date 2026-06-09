@@ -973,18 +973,32 @@ function init() {
     });
   }
 
-  // Manual complete
-  var mcInput = document.getElementById('ac-manual-complete-input');
-  var mcBtn   = document.getElementById('ac-manual-complete-btn');
+  // Manual complete / add to queue
+  var mcInput  = document.getElementById('ac-manual-complete-input');
+  var mdInput  = document.getElementById('ac-manual-discord-input');
+  var mcBtn    = document.getElementById('ac-manual-complete-btn');
+
+  function getAcAchievements() {
+    var cbs = document.querySelectorAll('.ac-ach-cb:checked');
+    var out = []; for (var i = 0; i < cbs.length; i++) out.push(cbs[i].value); return out;
+  }
+  function clearAcFields() {
+    if (mcInput) mcInput.value = '';
+    if (mdInput) mdInput.value = '';
+    document.querySelectorAll('.ac-ach-cb').forEach(function(cb) { cb.checked = false; });
+  }
+
   if (mcBtn) {
     var doManualComplete = async function() {
       if (!calibrated) return;
       var n = mcInput ? mcInput.value.trim() : ''; if (!n) return;
+      var d = mdInput ? mdInput.value.trim() : '';
+      var a = getAcAchievements();
       mcBtn.disabled=true; mcBtn.textContent='...';
       try {
-        var r = await sb.rpc('other_admin_add_to_completed', { pass: adminPass, p_rsn: n });
+        var r = await sb.rpc('other_admin_add_to_completed', { pass: adminPass, p_rsn: n, p_discord: d, p_achievements: a });
         if (r.error) throw r.error;
-        if (mcInput) mcInput.value='';
+        clearAcFields();
         mcBtn.textContent='✓ Done';
         fetchCompleted(); onRealtimeChange();
         setTimeout(function() { mcBtn.textContent='Complete'; mcBtn.disabled=false; }, 2000);
@@ -1000,11 +1014,13 @@ function init() {
     mqBtn.addEventListener('click', async function() {
       if (!calibrated) return;
       var n = mcInput ? mcInput.value.trim() : ''; if (!n) return;
+      var d = mdInput ? mdInput.value.trim() : '';
+      var a = getAcAchievements();
       mqBtn.disabled=true; mqBtn.textContent='...';
       try {
-        var r = await sb.rpc('other_admin_add_to_queue', { pass: adminPass, p_rsn: n });
+        var r = await sb.rpc('other_admin_add_to_queue', { pass: adminPass, p_rsn: n, p_discord: d, p_achievements: a });
         if (r.error) throw r.error;
-        if (mcInput) mcInput.value='';
+        clearAcFields();
         mqBtn.textContent='✓ Done';
         onRealtimeChange();
         setTimeout(function() { mqBtn.textContent='Add to Queue'; mqBtn.disabled=false; }, 2000);
