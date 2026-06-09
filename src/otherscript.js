@@ -454,8 +454,14 @@ function renderCompletedSidePanel(filter) {
         ci.achievements.map(function(a) { return '<span class="oth-ach-tag">' + escapeHtml(a) + '</span>'; }).join('') +
         '</div>';
     }
+    var discordLine = ci.discord_name
+      ? '<div style="font-size:11px;color:#6b7280;margin-top:1px;"><span style="color:#6b7280;">Discord:</span> ' + escapeHtml(ci.discord_name) + '</div>'
+      : '';
     html += '<div class="vgt-completed-side-item" style="flex-wrap:wrap;gap:2px;">' +
-      '<span class="vgt-completed-side-name" data-original="' + escapeHtml(ci.rsn) + '">' + escapeHtml(ci.rsn) + '</span>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<span class="vgt-completed-side-name" data-original="' + escapeHtml(ci.rsn) + '">' + escapeHtml(ci.rsn) + '</span>' +
+        discordLine +
+      '</div>' +
       '<button class="vgt-completed-side-skip" data-rsn="' + escapeHtml(ci.rsn) + '" title="Move to skipped">✗</button>' +
       (achTags ? '<div style="flex-basis:100%;padding-top:2px;">' + achTags + '</div>' : '') +
       '</div>';
