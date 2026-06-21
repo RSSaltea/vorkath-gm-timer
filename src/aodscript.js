@@ -1779,6 +1779,22 @@ function init() {
   });
 
   // ── Skipped panel delegation ─────────────────────────────────────
+  var flushSkippedBtn = document.getElementById('flush-skipped-btn');
+  if (flushSkippedBtn) {
+    flushSkippedBtn.addEventListener('click', async function() {
+      if (!calibrated || !confirm('Clear all skipped players?')) return;
+      flushSkippedBtn.disabled = true; flushSkippedBtn.textContent = '...';
+      try {
+        var r = await sb.rpc('admin_flush_skipped', { pass: adminPass });
+        if (r.error) throw r.error;
+        skippedData = [];
+        renderSkippedPanel();
+        flushSkippedBtn.textContent = '✓';
+        setTimeout(function() { flushSkippedBtn.textContent = 'Flush'; flushSkippedBtn.disabled = false; }, 1500);
+      } catch(err) { console.warn('[AOD] flush skipped failed:', err); flushSkippedBtn.textContent = 'Flush'; flushSkippedBtn.disabled = false; }
+    });
+  }
+
   document.getElementById('skipped-list').addEventListener('click', async function(e) {
     if (!calibrated) return;
 
