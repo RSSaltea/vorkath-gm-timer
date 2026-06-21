@@ -1786,7 +1786,7 @@ function init() {
       if (!calibrated || !confirm('Clear all skipped players?')) return;
       flushSkippedBtn.disabled = true; flushSkippedBtn.textContent = '...';
       try {
-        var r = await sb.rpc('admin_flush_skipped', { pass: adminPass });
+        var r = await sb.rpc('aod_admin_flush_skipped', { pass: adminPass });
         if (r.error) throw r.error;
         skippedData = [];
         renderSkippedPanel();
