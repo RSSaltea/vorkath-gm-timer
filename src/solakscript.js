@@ -1076,6 +1076,7 @@ function init() {
 
   // ── Polling fallback — in case realtime events are missed (e.g. Alt1 environment)
   setInterval(refresh, 10000);
+  setInterval(function() { if (chatPanelOpen) fetchAdminChat(); }, 5000);
 
   // ── Heartbeat — announce presence every 15 s
   sendHeartbeat();

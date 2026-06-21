@@ -927,6 +927,7 @@ function init() {
   setupRealtime();
   setInterval(refresh, 10000);
   setInterval(fetchCompleted, 10000);
+  setInterval(function() { if (chatPanelOpen) fetchAdminChat(); }, 5000);
   sendHeartbeat();
   heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
 
