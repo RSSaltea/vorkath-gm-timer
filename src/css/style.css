@@ -1690,6 +1690,20 @@ body.browser-view .vgt-chat-panel {
   margin-top: 2px;
 }
 
+.vgt-chat-delete-btn {
+  float: right;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 0 0 4px;
+  line-height: 1.6;
+  margin-left: 4px;
+  opacity: 0.5;
+}
+.vgt-chat-delete-btn:hover { color: #e74c3c; opacity: 1; }
+
 .vgt-chat-empty {
   text-align: center;
   color: var(--text-muted);

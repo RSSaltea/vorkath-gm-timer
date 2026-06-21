@@ -18,6 +18,7 @@ var heartbeatData        = {};
 var currentWorld         = '';
 var calibrated           = false;
 var adminPass            = '';
+var adminName            = '';
 var superCalibrated      = false;
 var superAdminPass       = '';
 var blacklist            = [];
@@ -462,7 +463,7 @@ function renderCompletedSidePanel(filter) {
         '<span class="vgt-completed-side-name" data-original="' + escapeHtml(ci.rsn) + '">' + escapeHtml(ci.rsn) + '</span>' +
         discordLine +
       '</div>' +
-      '<button class="vgt-completed-side-skip" data-rsn="' + escapeHtml(ci.rsn) + '" title="Move to skipped">✗</button>' +
+      '<button class="vgt-completed-side-skip" data-rsn="' + escapeHtml(ci.rsn) + '" data-id="' + ci.id + '" title="Move to skipped">✗</button>' +
       (achTags ? '<div style="flex-basis:100%;padding-top:2px;">' + achTags + '</div>' : '') +
       '</div>';
   }
@@ -664,6 +665,7 @@ function renderChatMessages() {
     try { time = new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); } catch(e) {}
     html += '<div class="vgt-chat-msg">' +
       '<span class="vgt-chat-msg-time">' + escapeHtml(time) + '</span>' +
+      (calibrated ? '<button class="vgt-chat-delete-btn" data-id="' + m.id + '" title="Delete">✕</button>' : '') +
       '<span class="vgt-chat-msg-name">' + escapeHtml(m.sender||'Admin') + '</span>' +
       '<div class="vgt-chat-msg-text">' + escapeHtml(m.message) + '</div></div>';
   }
@@ -674,7 +676,7 @@ async function sendChatMessage() {
   var input = document.getElementById('chat-input');
   var msg = input.value.trim();
   if (!msg || !calibrated) return;
-  var sender = getPlayerRSN() || 'Admin';
+  var sender = adminName || localStorage.getItem('admin_display_name') || getPlayerRSN() || 'Admin';
   var btn = document.getElementById('chat-send-btn');
   btn.disabled = true; input.disabled = true;
   try {
@@ -929,9 +931,10 @@ function init() {
   heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
 
   // ── Admin helpers ────────────────────────────────────────────────
-  function activateAdmin(pass) {
+  function activateAdmin(pass, displayName) {
     calibrated = true; adminPass = pass;
-    try { localStorage.setItem('oth_adminPass', pass); localStorage.setItem('oth_adminExpiry', String(Date.now() + 7*24*60*60*1000)); } catch(e) {}
+    if (displayName) adminName = displayName;
+    try { localStorage.setItem('oth_adminPass', pass); localStorage.setItem('oth_adminExpiry', String(Date.now() + 7*24*60*60*1000)); if (displayName) localStorage.setItem('admin_display_name', displayName); } catch(e) {}
     var ab = document.getElementById('admin-btn'); ab.textContent='Admin ✓'; ab.classList.add('active');
     updateQueueList(queueData);
     var at = document.querySelector('.vgt-tab.active');
@@ -942,7 +945,7 @@ function init() {
   }
 
   function deactivateAdmin() {
-    calibrated = false; adminPass = '';
+    calibrated = false; adminPass = ''; adminName = '';
     deactivateSuperAdmin();
     try { localStorage.removeItem('oth_adminPass'); localStorage.removeItem('oth_adminExpiry'); } catch(e) {}
     var ab = document.getElementById('admin-btn'); ab.textContent='Admin'; ab.classList.remove('active');
@@ -1057,11 +1060,12 @@ function init() {
   // Auto-login: try global admin session
   try {
     var vgtPass = localStorage.getItem('vgt_adminPass');
+    var savedAdminName = localStorage.getItem('admin_display_name');
     var vgtExpiry = parseInt(localStorage.getItem('vgt_adminExpiry'),10);
     if (vgtPass && vgtExpiry && Date.now() < vgtExpiry) {
       sb.rpc('check_other_admin',{pass:vgtPass}).then(function(r) {
         if (r.data===true && !calibrated) {
-          activateAdmin(vgtPass);
+          activateAdmin(vgtPass, savedAdminName);
           sb.rpc('check_super_admin',{pass:vgtPass}).then(function(r2) { if (r2.data===true) activateSuperAdmin(vgtPass); });
         }
       });
@@ -1071,10 +1075,11 @@ function init() {
   // Auto-login: try Other-specific session
   try {
     var othPass = localStorage.getItem('oth_adminPass');
+    var othAdminName = localStorage.getItem('admin_display_name');
     var othExpiry = parseInt(localStorage.getItem('oth_adminExpiry'),10);
     if (othPass && othExpiry && Date.now() < othExpiry) {
       sb.rpc('check_other_admin',{pass:othPass}).then(function(r) {
-        if (r.data===true && !calibrated) activateAdmin(othPass);
+        if (r.data===true && !calibrated) activateAdmin(othPass, othAdminName);
       });
     }
   } catch(e) {}
@@ -1089,22 +1094,37 @@ function init() {
 
   adminBtn.addEventListener('click', function() {
     if (calibrated) { deactivateAdmin(); return; }
-    adminOverlay.style.display='flex'; adminPassInput.value=''; adminError.style.display='none'; adminPassInput.focus();
+    var adminNameInput = document.getElementById('admin-name-input');
+    if (adminNameInput) adminNameInput.value = '';
+    adminOverlay.style.display='flex'; adminPassInput.value=''; adminError.style.display='none';
+    if (adminNameInput) adminNameInput.focus(); else adminPassInput.focus();
   });
   adminCancelBtn.addEventListener('click', function() { adminOverlay.style.display='none'; });
 
   async function attemptCalibration() {
-    var entered = adminPassInput.value.trim(); if (!entered) return;
+    var adminNameInput = document.getElementById('admin-name-input');
+    var enteredName = adminNameInput ? adminNameInput.value.trim() : '';
+    var enteredPass = adminPassInput.value.trim();
+    if (!enteredName || !enteredPass) {
+      adminError.textContent='Enter your name and passcode'; adminError.style.display='block'; return;
+    }
     adminLoginBtn.disabled=true;
     try {
-      var result = await sb.rpc('check_other_admin',{pass:entered});
+      var result = await sb.rpc('login_admin', {
+        p_name: enteredName,
+        p_passcode: enteredPass,
+        p_required_roles: ['vorkath_misc', 'admin', 'super_admin']
+      });
       if (result.error) throw result.error;
-      if (result.data===true) {
-        activateAdmin(entered); adminOverlay.style.display='none';
-        sb.rpc('check_super_admin',{pass:entered}).then(function(r) { if (r.data===true) activateSuperAdmin(entered); });
+      if (result.data && result.data.valid) {
+        var credential = enteredName + '|' + enteredPass;
+        activateAdmin(credential, result.data.display_name);
+        adminOverlay.style.display='none';
+        if (adminNameInput) adminNameInput.value='';
+        adminPassInput.value='';
+        if (result.data.is_super) activateSuperAdmin(credential);
       } else {
-        adminError.textContent='Invalid key'; adminError.style.display='block';
-        adminPassInput.value=''; adminPassInput.focus();
+        adminError.textContent='Invalid name or passcode'; adminError.style.display='block';
       }
     } catch(err) { adminError.textContent='Could not verify — retry'; adminError.style.display='block'; }
     adminLoginBtn.disabled=false;
@@ -1115,6 +1135,13 @@ function init() {
     if (e.key==='Enter') attemptCalibration();
     if (e.key==='Escape') adminOverlay.style.display='none';
   });
+  var adminNameInputEl = document.getElementById('admin-name-input');
+  if (adminNameInputEl) {
+    adminNameInputEl.addEventListener('keydown', function(e) {
+      if (e.key==='Enter') { var pi=document.getElementById('admin-pass-input'); if(pi) pi.focus(); }
+      if (e.key==='Escape') adminOverlay.style.display='none';
+    });
+  }
 
   // Achievement completion modal
   document.getElementById('complete-modal-cancel').addEventListener('click', function() {
@@ -1307,8 +1334,10 @@ function init() {
     if(!calibrated) return;
     var skipBtn=e.target.closest('.vgt-completed-side-skip');
     if(skipBtn&&!skipBtn.disabled) {
-      var rsn=skipBtn.getAttribute('data-rsn'); skipBtn.disabled=true; skipBtn.textContent='...';
-      sb.rpc('other_admin_uncomplete_to_skip',{pass:adminPass,p_rsn:rsn})
+      var rsn=skipBtn.getAttribute('data-rsn');
+      var cid=parseInt(skipBtn.getAttribute('data-id'),10);
+      skipBtn.disabled=true; skipBtn.textContent='...';
+      sb.rpc('other_admin_uncomplete_to_skip',{pass:adminPass,p_id:cid,p_rsn:rsn})
         .then(function(res) {
           if(res.error) throw res.error;
           var item=skipBtn.closest('.vgt-completed-side-item'); if(item) item.remove();
@@ -1344,6 +1373,18 @@ function init() {
   // Admin chat
   document.getElementById('chat-send-btn').addEventListener('click', sendChatMessage);
   document.getElementById('chat-input').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendChatMessage();}});
+  document.getElementById('chat-messages').addEventListener('click', async function(e) {
+    var btn = e.target.closest('.vgt-chat-delete-btn');
+    if (!btn || !calibrated || btn.disabled) return;
+    var id = parseInt(btn.getAttribute('data-id'), 10);
+    btn.disabled = true;
+    try {
+      var r = await sb.rpc('other_delete_admin_chat', { pass: adminPass, p_id: id });
+      if (r.error) throw r.error;
+      chatMessages = chatMessages.filter(function(m) { return m.id !== id; });
+      renderChatMessages();
+    } catch(err) { btn.disabled = false; }
+  });
 
   // Skipped panel
   document.getElementById('skipped-list').addEventListener('click',async function(e) {

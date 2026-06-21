@@ -27,6 +27,7 @@ var heartbeatData   = {};
 var currentWorld    = '';
 var calibrated      = false;
 var adminPass       = '';
+var adminName       = '';
 var superCalibrated = false;
 var superAdminPass  = '';
 var blacklist       = [];
@@ -841,6 +842,7 @@ function renderChatMessages() {
     } catch (e) {}
     html += '<div class="vgt-chat-msg">' +
       '<span class="vgt-chat-msg-time">' + escapeHtml(time) + '</span>' +
+      (calibrated ? '<button class="vgt-chat-delete-btn" data-id="' + m.id + '" title="Delete">✕</button>' : '') +
       '<span class="vgt-chat-msg-name">' + escapeHtml(m.sender || 'Admin') + '</span>' +
       '<div class="vgt-chat-msg-text">' + escapeHtml(m.message) + '</div>' +
       '</div>';
@@ -854,7 +856,7 @@ async function sendChatMessage() {
   var msg = input.value.trim();
   if (!msg || !calibrated) return;
 
-  var sender = getEffectiveName() || 'Admin';
+  var sender = adminName || localStorage.getItem('admin_display_name') || getEffectiveName() || 'Admin';
   var btn = document.getElementById('chat-send-btn');
   btn.disabled = true;
   input.disabled = true;
@@ -1113,12 +1115,14 @@ function init() {
   heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
 
   // ── Admin helpers ───────────────────────────────────────────────
-  function activateAdmin(pass) {
+  function activateAdmin(pass, displayName) {
     calibrated = true;
     adminPass = pass;
+    if (displayName) adminName = displayName;
     try {
       localStorage.setItem('vgt_adminPass', pass);
       localStorage.setItem('vgt_adminExpiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+      if (displayName) localStorage.setItem('admin_display_name', displayName);
     } catch (e) {}
     var ab = document.getElementById('admin-btn');
     ab.textContent = 'Admin ✓';
@@ -1141,10 +1145,12 @@ function init() {
   function deactivateAdmin() {
     calibrated = false;
     adminPass = '';
+    adminName = '';
     deactivateSuperAdmin();
     try {
       localStorage.removeItem('vgt_adminPass');
       localStorage.removeItem('vgt_adminExpiry');
+      localStorage.removeItem('admin_display_name');
     } catch (e) {}
     var ab = document.getElementById('admin-btn');
     ab.textContent = 'Admin';
@@ -1295,11 +1301,12 @@ function init() {
   // ── Auto-login from saved session ─────────────────────────────
   try {
     var savedPass = localStorage.getItem('vgt_adminPass');
+    var savedName = localStorage.getItem('admin_display_name');
     var savedExpiry = localStorage.getItem('vgt_adminExpiry');
     if (savedPass && savedExpiry && Date.now() < Number(savedExpiry)) {
       sb.rpc('check_admin', { pass: savedPass }).then(function(result) {
         if (result.data === true) {
-          activateAdmin(savedPass);
+          activateAdmin(savedPass, savedName);
           sb.rpc('check_super_admin', { pass: savedPass }).then(function(r) {
             if (r.data === true) activateSuperAdmin(savedPass);
           });
@@ -1347,9 +1354,11 @@ function init() {
       return;
     }
     adminOverlay.style.display = 'flex';
+    var adminNameInput = document.getElementById('admin-name-input');
+    if (adminNameInput) adminNameInput.value = '';
     adminPassInput.value = '';
     adminError.style.display = 'none';
-    adminPassInput.focus();
+    if (adminNameInput) adminNameInput.focus(); else adminPassInput.focus();
   });
 
   adminCancelBtn.addEventListener('click', function() {
@@ -1357,30 +1366,32 @@ function init() {
   });
 
   async function attemptCalibration() {
-    var entered = adminPassInput.value.trim();
-    if (!entered) return;
+    var adminNameInput = document.getElementById('admin-name-input');
+    var enteredName = adminNameInput ? adminNameInput.value.trim() : '';
+    var enteredPass = adminPassInput.value.trim();
+    if (!enteredName || !enteredPass) {
+      adminError.textContent = 'Enter your name and passcode';
+      adminError.style.display = 'block';
+      return;
+    }
     adminLoginBtn.disabled = true;
     try {
-      var result = await sb.rpc('check_admin', { pass: entered });
+      var result = await sb.rpc('login_admin', {
+        p_name: enteredName,
+        p_passcode: enteredPass,
+        p_required_roles: ['aod_gm', 'admin', 'super_admin']
+      });
       if (result.error) throw result.error;
-      if (result.data === true) {
-        activateAdmin(entered);
+      if (result.data && result.data.valid) {
+        var credential = enteredName + '|' + enteredPass;
+        activateAdmin(credential, result.data.display_name);
         adminOverlay.style.display = 'none';
-        sb.rpc('check_super_admin', { pass: entered }).then(function(r) {
-          if (r.data === true) activateSuperAdmin(entered);
-        });
+        if (adminNameInput) adminNameInput.value = '';
+        adminPassInput.value = '';
+        if (result.data.is_super) activateSuperAdmin(credential);
       } else {
-        var superResult = await sb.rpc('check_super_admin', { pass: entered });
-        if (superResult.data === true) {
-          activateAdmin(entered);
-          activateSuperAdmin(entered);
-          adminOverlay.style.display = 'none';
-        } else {
-          adminError.textContent = 'Invalid key';
-          adminError.style.display = 'block';
-          adminPassInput.value = '';
-          adminPassInput.focus();
-        }
+        adminError.textContent = 'Invalid name or passcode';
+        adminError.style.display = 'block';
       }
     } catch (err) {
       adminError.textContent = 'Could not verify — retry';
@@ -1395,6 +1406,13 @@ function init() {
     if (e.key === 'Enter') attemptCalibration();
     if (e.key === 'Escape') adminOverlay.style.display = 'none';
   });
+  var adminNameInputEl = document.getElementById('admin-name-input');
+  if (adminNameInputEl) {
+    adminNameInputEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { var pi = document.getElementById('admin-pass-input'); if (pi) pi.focus(); }
+      if (e.key === 'Escape') adminOverlay.style.display = 'none';
+    });
+  }
 
   // ── Queue action delegation ──────────────────────────────────────
   var queueListEl = document.getElementById('queue-list');
@@ -1746,6 +1764,18 @@ function init() {
   document.getElementById('chat-send-btn').addEventListener('click', sendChatMessage);
   document.getElementById('chat-input').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
+  });
+  document.getElementById('chat-messages').addEventListener('click', async function(e) {
+    var btn = e.target.closest('.vgt-chat-delete-btn');
+    if (!btn || !calibrated || btn.disabled) return;
+    var id = parseInt(btn.getAttribute('data-id'), 10);
+    btn.disabled = true;
+    try {
+      var r = await sb.rpc('delete_admin_chat', { pass: adminPass, p_id: id });
+      if (r.error) throw r.error;
+      chatMessages = chatMessages.filter(function(m) { return m.id !== id; });
+      renderChatMessages();
+    } catch(err) { btn.disabled = false; }
   });
 
   // ── Skipped panel delegation ─────────────────────────────────────
