@@ -1723,7 +1723,7 @@ function init() {
   var flushSkippedBtn = document.getElementById('flush-skipped-btn');
   if (flushSkippedBtn) {
     flushSkippedBtn.addEventListener('click', async function() {
-      if (!calibrated || !confirm('Clear all skipped players?')) return;
+      if (!calibrated) return;
       flushSkippedBtn.disabled = true; flushSkippedBtn.textContent = '...';
       try {
         var r = await sb.rpc('solak_admin_flush_skipped', { pass: adminPass });
