@@ -1729,7 +1729,7 @@ function init() {
   var flushSkippedBtn = document.getElementById('flush-skipped-btn');
   if (flushSkippedBtn) {
     flushSkippedBtn.addEventListener('click', async function() {
-      if (!calibrated) return;
+      if (!calibrated) { flushSkippedBtn.textContent = '!auth'; setTimeout(function(){ flushSkippedBtn.textContent='Flush'; },2000); return; }
       flushSkippedBtn.disabled = true; flushSkippedBtn.textContent = '...';
       try {
         var r = await sb.rpc('admin_flush_skipped', { pass: adminPass });
@@ -1738,7 +1738,11 @@ function init() {
         renderSkippedPanel();
         flushSkippedBtn.textContent = '✓';
         setTimeout(function() { flushSkippedBtn.textContent = 'Flush'; flushSkippedBtn.disabled = false; }, 1500);
-      } catch(err) { console.warn('[VGT] flush skipped failed:', err); flushSkippedBtn.textContent = 'Flush'; flushSkippedBtn.disabled = false; }
+      } catch(err) {
+        console.warn('[VGT] flush skipped failed:', err);
+        flushSkippedBtn.textContent = '!' + (err.message || err.code || 'err');
+        setTimeout(function(){ flushSkippedBtn.textContent = 'Flush'; flushSkippedBtn.disabled = false; }, 3000);
+      }
     });
   }
 
